@@ -1,5 +1,5 @@
 {
-  "name": "@cliveedit/editor",
+  "name": "@dev_owl/cliveedit",
   "version": "0.1.0",
   "description": "CliveEdit — A themeable WYSIWYG markdown editor component for Vue 3",
   "type": "module",
@@ -46,11 +46,14 @@
     "vue": "^3.5.28",
     "vue-tsc": "^3.2.4"
   },
+  "author": "Christian <christian.muehle@devowl.de>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/Dev-Owl/clive_editor.git"
   },
+  "homepage": "https://github.com/Dev-Owl/clive_editor#readme",
+  "bugs": "https://github.com/Dev-Owl/clive_editor/issues",
   "keywords": [
     "vue",
     "vue3",
@@ -59,5 +62,8 @@
     "editor",
     "rich-text",
     "cliveedit"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

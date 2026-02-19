@@ -41,7 +41,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
 ## Installation
 
 ```bash
-npm install @cliveedit/editor
+npm install @dev_owl/cliveedit
 ```
 
 **Peer dependency:** Vue 3.3 or higher.
