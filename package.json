@@ -26,6 +26,7 @@
     "dev": "vite --config vite.dev.config.ts",
     "build": "vue-tsc --noEmit && vite build && vue-tsc -p tsconfig.build.json",
     "build:only": "vite build",
+    "build:pages": "vite build --config vite.pages.config.ts",
     "typecheck": "vue-tsc --noEmit"
   },
   "peerDependencies": {
