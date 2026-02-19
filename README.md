@@ -61,8 +61,8 @@ npm install vue@^3.5
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { CliveEdit } from '@cliveedit/editor'
-import '@cliveedit/editor/style.css'
+import { CliveEdit } from '@dev_owl/cliveedit'
+import '@dev_owl/cliveedit/style.css'
 
 const content = ref('# Hello World\n\nStart writing **markdown** here.')
 </script>
@@ -83,8 +83,8 @@ Need to display markdown without editing? Use the `MarkdownViewer` component:
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { MarkdownViewer } from '@cliveedit/editor'
-import '@cliveedit/editor/style.css'
+import { MarkdownViewer } from '@dev_owl/cliveedit'
+import '@dev_owl/cliveedit/style.css'
 
 const content = ref('# Hello World\n\nThis is **read-only** markdown.')
 </script>
@@ -179,7 +179,7 @@ Access these via a template ref:
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { CliveEdit } from '@cliveedit/editor'
+import { CliveEdit } from '@dev_owl/cliveedit'
 
 const editorRef = ref<InstanceType<typeof CliveEdit> | null>(null)
 const content = ref('')
@@ -258,8 +258,8 @@ Pass a `toolbarItems` array to replace the entire toolbar:
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { CliveEdit } from '@cliveedit/editor'
-import type { ToolbarItem } from '@cliveedit/editor'
+import { CliveEdit } from '@dev_owl/cliveedit'
+import type { ToolbarItem } from '@dev_owl/cliveedit'
 import { Bold, Italic, Heading1 } from 'lucide-vue-next'
 
 const content = ref('')
@@ -453,8 +453,8 @@ Instead of importing `CliveEdit` in every component, you can register it globall
 ```ts
 // main.ts
 import { createApp } from 'vue'
-import { CliveEditPlugin } from '@cliveedit/editor'
-import '@cliveedit/editor/style.css'
+import { CliveEditPlugin } from '@dev_owl/cliveedit'
+import '@dev_owl/cliveedit/style.css'
 import App from './App.vue'
 
 const app = createApp(App)
@@ -481,7 +481,7 @@ CliveEdit provides an `EditorContext` object via Vue's provide/inject system. Ch
 
 ```ts
 import { inject } from 'vue'
-import { EDITOR_CTX_KEY } from '@cliveedit/editor'
+import { EDITOR_CTX_KEY } from '@dev_owl/cliveedit'
 
 const ctx = inject(EDITOR_CTX_KEY)
 
@@ -543,7 +543,7 @@ interface EditorContext {
 The undo/redo system is available as a standalone composable for headless or custom editor builds:
 
 ```ts
-import { useHistory } from '@cliveedit/editor'
+import { useHistory } from '@dev_owl/cliveedit'
 
 const history = useHistory({ maxDepth: 50, debounceMs: 200 })
 
@@ -575,7 +575,7 @@ The editor command layer is available standalone for building custom UIs around 
 
 ```ts
 import { ref } from 'vue'
-import { useEditor } from '@cliveedit/editor'
+import { useEditor } from '@dev_owl/cliveedit'
 
 const editorEl = ref<HTMLElement | null>(null)
 const editor = useEditor(editorEl)
@@ -611,7 +611,7 @@ import type {
   CliveEditEmits,
   EditorContext,
   MarkdownViewerProps,
-} from '@cliveedit/editor'
+} from '@dev_owl/cliveedit'
 ```
 
 ---
@@ -631,7 +631,7 @@ Build outputs in `dist/`:
 |---|---|---|
 | `cliveedit.es.js` | ESM | For modern bundlers (Vite, Webpack 5, Rollup) |
 | `cliveedit.umd.js` | UMD | For script tags and legacy bundlers |
-| `editor.css` | CSS | All editor styles (import as `@cliveedit/editor/style.css`) |
+| `editor.css` | CSS | All editor styles (import as `@dev_owl/cliveedit/style.css`) |
 | `*.d.ts` | TypeScript | Type declarations for all exports |
 
 ---
