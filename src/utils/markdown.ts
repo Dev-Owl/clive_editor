@@ -1,0 +1,110 @@
+/* ================================================================== */
+/*  markdown.ts — thin wrappers around markdown-it & turndown          */
+/* ================================================================== */
+
+import MarkdownIt from 'markdown-it'
+import TurndownService from 'turndown'
+
+/* ---------- markdown-it (MD → HTML) ---------- */
+
+const md = new MarkdownIt({
+  html: false,       // disable raw HTML tags in source (security)
+  linkify: true,     // auto-convert URL-like text to links
+  typographer: true, // smart-quotes, dashes
+  breaks: true,      // convert \n in paragraphs into <br>
+})
+
+/**
+ * Parse a markdown string into an HTML string.
+ */
+export function parseMarkdown(markdown: string): string {
+  return md.render(markdown)
+}
+
+/* ---------- turndown (HTML → MD) ---------- */
+
+const td = new TurndownService({
+  headingStyle: 'atx',          // # style headings
+  hr: '---',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  fence: '```',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+  linkStyle: 'inlined',
+})
+
+// Strikethrough rule
+td.addRule('strikethrough', {
+  filter: ['del', 's'],
+  replacement(content) {
+    return `~~${content}~~`
+  },
+})
+
+/* ---------- GFM table rules ---------- */
+
+/**
+ * Helper: count the number of columns by looking at the first <tr>
+ * inside the table.  Returns an array of cell counts per row for alignment.
+ */
+function cellContent(cell: HTMLElement): string {
+  return td.turndown(cell.innerHTML).replace(/\n/g, ' ').trim()
+}
+
+td.addRule('tableCell', {
+  filter: ['th', 'td'],
+  replacement(content, node) {
+    return ''   // handled by tableRow
+  },
+})
+
+td.addRule('tableRow', {
+  filter: 'tr',
+  replacement(_content, node) {
+    const el = node as HTMLElement
+    const cells = Array.from(el.children).filter(
+      (c) => c.tagName === 'TH' || c.tagName === 'TD',
+    ) as HTMLElement[]
+
+    const row = cells.map((c) => ` ${cellContent(c)} `).join('|')
+    return `|${row}|\n`
+  },
+})
+
+td.addRule('tableHead', {
+  filter: 'thead',
+  replacement(content, node) {
+    const el = node as HTMLElement
+    const firstRow = el.querySelector('tr')
+    if (!firstRow) return content
+
+    const cells = Array.from(firstRow.children).filter(
+      (c) => c.tagName === 'TH' || c.tagName === 'TD',
+    )
+    const separator = cells.map(() => ' --- ').join('|')
+    return `${content}|${separator}|\n`
+  },
+})
+
+td.addRule('tableBody', {
+  filter: 'tbody',
+  replacement(content) {
+    return content
+  },
+})
+
+td.addRule('table', {
+  filter: 'table',
+  replacement(content) {
+    // Ensure blank lines around the table for valid markdown
+    return `\n\n${content}\n`
+  },
+})
+
+/**
+ * Convert an HTML string back to markdown.
+ */
+export function serializeHtml(html: string): string {
+  return td.turndown(html)
+}

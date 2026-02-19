@@ -1,0 +1,84 @@
+/* ================================================================== */
+/*  CliveEdit — Toolbar Styles                                         */
+/* ================================================================== */
+
+.ce-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--ce-toolbar-bg);
+  border-bottom: 1px solid var(--ce-toolbar-border);
+  border-radius: var(--ce-radius) var(--ce-radius) 0 0;
+  user-select: none;
+}
+
+/* ---- Separator between groups ---- */
+.ce-toolbar__divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--ce-toolbar-border);
+  flex-shrink: 0;
+}
+
+/* ---- Button ---- */
+.ce-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ce-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ce-toolbar__btn:hover {
+  background: var(--ce-toolbar-btn-hover);
+}
+
+.ce-toolbar__btn:active {
+  background: var(--ce-toolbar-btn-active);
+}
+
+.ce-toolbar__btn--active {
+  background: var(--ce-toolbar-btn-active);
+  color: var(--ce-link-color);
+}
+
+.ce-toolbar__btn:focus-visible {
+  outline: 2px solid var(--ce-focus-ring);
+  outline-offset: 1px;
+}
+
+.ce-toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ce-toolbar__btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+/* ---- Mode toggle (right-aligned) ---- */
+.ce-toolbar__spacer {
+  flex: 1;
+}
+
+.ce-toolbar__mode-btn {
+  composes: ce-toolbar__btn;
+  font-size: 11px;
+  font-weight: 600;
+  width: auto;
+  padding: 0 8px;
+  gap: 4px;
+}

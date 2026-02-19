@@ -1,0 +1,51 @@
+/* ================================================================== */
+/*  CliveEdit — CSS Custom Properties (theming)                        */
+/*                                                                     */
+/*  Host applications override these variables under `.cliveedit`      */
+/*  or any ancestor selector to adapt the editor to their design       */
+/*  system.                                                            */
+/*                                                                     */
+/*  Example:                                                           */
+/*    .my-dark-theme .cliveedit {                                      */
+/*      --ce-bg: #1e1e1e;                                              */
+/*      --ce-text: #d4d4d4;                                            */
+/*    }                                                                */
+/* ================================================================== */
+
+.cliveedit {
+  /* ---- Layout ---- */
+  --ce-bg: #ffffff;
+  --ce-text: #1a1a1a;
+  --ce-border: #d0d5dd;
+  --ce-radius: 8px;
+
+  /* ---- Toolbar ---- */
+  --ce-toolbar-bg: #f9fafb;
+  --ce-toolbar-border: #e5e7eb;
+  --ce-toolbar-btn-hover: #e5e7eb;
+  --ce-toolbar-btn-active: #d0d5dd;
+
+  /* ---- Typography ---- */
+  --ce-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --ce-font-size: 16px;
+  --ce-line-height: 1;
+  --ce-mono-font: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo,
+    monospace;
+
+  /* ---- Content elements ---- */
+  --ce-code-bg: #f3f4f6;
+  --ce-code-text: #e11d48;
+  --ce-blockquote-border: #6366f1;
+  --ce-link-color: #2563eb;
+  --ce-hr-color: #d0d5dd;
+
+  /* ---- Selection ---- */
+  --ce-selection-bg: rgba(99, 102, 241, 0.2);
+
+  /* ---- Placeholder ---- */
+  --ce-placeholder-color: #9ca3af;
+
+  /* ---- Focus ---- */
+  --ce-focus-ring: rgba(99, 102, 241, 0.4);
+}
