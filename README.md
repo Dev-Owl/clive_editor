@@ -388,15 +388,47 @@ CliveEdit uses CSS custom properties scoped under the `.cliveedit` class. Overri
 | `--ce-line-height` | `1` | Content line height |
 | `--ce-mono-font` | `Consolas, monospace...` | Monospace font for code |
 
+#### Headings
+
+| Variable | Default | Description |
+|---|---|---|
+| `--ce-h1-font-size` | `2em` | H1 font size |
+| `--ce-h1-font-weight` | `700` | H1 font weight |
+| `--ce-h1-margin` | `0.67em 0` | H1 margin |
+| `--ce-h1-line-height` | `1.25` | H1 line height |
+| `--ce-h2-font-size` | `1.5em` | H2 font size |
+| `--ce-h2-font-weight` | `600` | H2 font weight |
+| `--ce-h2-margin` | `0.75em 0` | H2 margin |
+| `--ce-h2-line-height` | `1.3` | H2 line height |
+| `--ce-h3-font-size` | `1.25em` | H3 font size |
+| `--ce-h3-font-weight` | `600` | H3 font weight |
+| `--ce-h3-margin` | `0.75em 0` | H3 margin |
+| `--ce-h3-line-height` | `1.35` | H3 line height |
+
 #### Content Elements
 
 | Variable | Default | Description |
 |---|---|---|
+| `--ce-content-margin` | `0.75em 0` | Shared vertical margin for blocks (pre, blockquote, table) |
+| `--ce-content-padding` | `16px 20px` | Editor & viewer area padding |
 | `--ce-code-bg` | `#f3f4f6` | Code background |
 | `--ce-code-text` | `#e11d48` | Inline code text colour |
-| `--ce-blockquote-border` | `#6366f1` | Blockquote left border |
+| `--ce-code-font-size` | `0.9em` | Code font size |
+| `--ce-code-padding` | `2px 5px` | Inline code padding |
+| `--ce-code-radius` | `3px` | Inline code border radius |
+| `--ce-pre-padding` | `12px 16px` | Code block padding |
+| `--ce-pre-radius` | `6px` | Code block border radius |
+| `--ce-blockquote-border` | `#6366f1` | Blockquote left border colour |
+| `--ce-blockquote-border-width` | `4px` | Blockquote left border width |
+| `--ce-blockquote-padding` | `4px 16px` | Blockquote padding |
+| `--ce-blockquote-opacity` | `0.85` | Blockquote text opacity |
 | `--ce-link-color` | `#2563eb` | Link colour |
+| `--ce-list-padding-left` | `1.5em` | List indentation |
 | `--ce-hr-color` | `#d0d5dd` | Horizontal rule colour |
+| `--ce-hr-border-width` | `2px` | Horizontal rule thickness |
+| `--ce-hr-margin` | `1em 0` | Horizontal rule margin |
+| `--ce-img-radius` | `4px` | Image border radius |
+| `--ce-table-cell-padding` | `6px 12px` | Table cell padding |
 
 #### Interaction
 
@@ -425,6 +457,7 @@ CliveEdit uses CSS custom properties scoped under the `.cliveedit` class. Overri
   --ce-placeholder-color: #6a6a6a;
   --ce-focus-ring: rgba(99, 102, 241, 0.5);
   --ce-hr-color: #3e3e42;
+  --ce-line-height: 1;
 }
 ```
 

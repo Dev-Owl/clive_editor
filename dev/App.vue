@@ -419,5 +419,6 @@ h1 {
   --ce-focus-ring: rgba(99, 102, 241, 0.5);
   --ce-hr-color: #3e3e42;
   --ce-line-height: 1;
+  --ce-img-radius: 4px;
 }
 </style>
