@@ -4,6 +4,8 @@ A themeable WYSIWYG markdown editor component for Vue 3, built with TypeScript.
 
 CliveEdit gives your users a rich editing experience with a familiar toolbar while keeping markdown as the canonical data format. Switch between visual and raw markdown modes, undo/redo with full history, and adapt the look to any design system using CSS custom properties.
 
+**[🚀 Try the Demo](https://dev-owl.github.io/clive_editor/)**
+
 ---
 
 ## Table of Contents
