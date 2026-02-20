@@ -14,6 +14,37 @@ const md = new MarkdownIt({
   breaks: true,      // convert \n in paragraphs into <br>
 })
 
+/* ---------- heading anchor slugs ---------- */
+
+/**
+ * Generate a URL-friendly slug from heading text.
+ * Matches GitHub-style anchor generation.
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')   // strip non-word chars (except spaces & dashes)
+    .replace(/\s+/g, '-')       // spaces → hyphens
+    .replace(/-+/g, '-')        // collapse consecutive hyphens
+}
+
+// Override the default heading_open renderer to inject `id` attributes
+const defaultHeadingOpen =
+  md.renderer.rules.heading_open ??
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+
+md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  // Walk forward to find the inline content token
+  const contentToken = tokens[idx + 1]
+  if (contentToken?.type === 'inline' && contentToken.content) {
+    const slug = slugify(contentToken.content)
+    token.attrSet('id', slug)
+  }
+  return defaultHeadingOpen(tokens, idx, options, env, self)
+}
+
 /**
  * Parse a markdown string into an HTML string.
  */
