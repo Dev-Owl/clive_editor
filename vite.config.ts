@@ -23,10 +23,11 @@ export default defineConfig({
       fileName: (format) => `cliveedit.${format}.js`,
     },
     rollupOptions: {
-      external: ['vue'],
+      external: ['vue', 'shiki'],
       output: {
         globals: {
           vue: 'Vue',
+          shiki: 'shiki',
         },
       },
     },

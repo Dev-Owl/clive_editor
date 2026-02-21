@@ -1,26 +1,9 @@
 <template>
   <div class="ce-wysiwyg-wrap">
-    <TableControls
-      :editor-el="editorEl"
-      :disabled="disabled"
-      @change="onInput"
-    />
-    <div
-      ref="editorEl"
-      class="ce-wysiwyg"
-      contenteditable="true"
-      role="textbox"
-      aria-multiline="true"
-      :aria-label="placeholder || 'Rich text editor'"
-      :data-placeholder="placeholder"
-      spellcheck="true"
-      @input="onInput"
-      @keydown="onKeydown"
-      @keyup="onSelectionChange"
-      @paste="onPaste"
-      @click="onClick"
-      @mouseup="onSelectionChange"
-    />
+    <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
+    <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
+      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput"
+      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @click="onClick" @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -42,6 +25,8 @@ const props = defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean
+  /** Optional highlight function for syntax highlighting code blocks */
+  highlight?: (code: string, lang: string) => string
 }>()
 
 const emit = defineEmits<{
@@ -79,7 +64,9 @@ defineExpose({
   refreshFromMarkdown: () => {
     if (!editorEl.value) return
     isSyncing = true
-    editorEl.value.innerHTML = parseMarkdown(props.modelValue)
+    editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
+      highlight: props.highlight,
+    })
     isSyncing = false
   },
   /** Focus the editor */
@@ -90,7 +77,9 @@ defineExpose({
 
 onMounted(() => {
   if (editorEl.value && props.modelValue) {
-    editorEl.value.innerHTML = parseMarkdown(props.modelValue)
+    editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
+      highlight: props.highlight,
+    })
   }
   // Listen for modifier keys to show clickable-link cursor hint
   window.addEventListener('keydown', onModifierDown)
@@ -124,7 +113,9 @@ watch(
     const currentMd = serializeHtml(editorEl.value.innerHTML)
     if (currentMd !== md) {
       isSyncing = true
-      editorEl.value.innerHTML = parseMarkdown(md)
+      editorEl.value.innerHTML = parseMarkdown(md, {
+        highlight: props.highlight,
+      })
       isSyncing = false
     }
   },
@@ -137,6 +128,39 @@ let inputTimer: ReturnType<typeof setTimeout> | null = null
 function onInput(): void {
   if (isSyncing) return
   emit('input')
+
+  // Debounced re-highlight of the current code block
+  if (props.highlight) {
+    if (highlightTimer) clearTimeout(highlightTimer)
+    highlightTimer = setTimeout(() => {
+      rehighlightCurrentBlock()
+    }, 300)
+  }
+
+  // Repair any <pre> blocks where the browser removed the <code> element
+  // (happens when the user deletes all content — the lang label div keeps
+  // the <pre> alive visually but <code> is gone).
+  if (editorEl.value) {
+    for (const pre of editorEl.value.querySelectorAll('pre')) {
+      if (!pre.querySelector('code')) {
+        const labelEl = pre.querySelector('.ce-code-lang')
+        const lang = (labelEl as HTMLElement)?.dataset?.lang ?? ''
+        const codeEl = document.createElement('code')
+        if (lang) codeEl.className = `language-${lang}`
+        codeEl.appendChild(document.createTextNode(''))
+        pre.appendChild(codeEl)
+        // Place cursor inside the restored <code>
+        const sel = window.getSelection()
+        if (sel) {
+          const range = document.createRange()
+          range.selectNodeContents(codeEl)
+          range.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
+      }
+    }
+  }
 
   // Debounced emit of markdown value
   if (inputTimer) clearTimeout(inputTimer)
@@ -216,11 +240,11 @@ function onKeydown(e: KeyboardEvent): void {
         const origRange = sel.getRangeAt(0)
         // Use the later start and the earlier end
         if (cell.contains(origRange.startContainer) &&
-            safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
+          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
           safeRange.setStart(origRange.startContainer, origRange.startOffset)
         }
         if (cell.contains(origRange.endContainer) &&
-            safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
+          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
           safeRange.setEnd(origRange.endContainer, origRange.endOffset)
         }
         sel.removeAllRanges()
@@ -244,11 +268,11 @@ function onKeydown(e: KeyboardEvent): void {
         safeRange.selectNodeContents(cell)
         const origRange = sel.getRangeAt(0)
         if (cell.contains(origRange.startContainer) &&
-            safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
+          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
           safeRange.setStart(origRange.startContainer, origRange.startOffset)
         }
         if (cell.contains(origRange.endContainer) &&
-            safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
+          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
           safeRange.setEnd(origRange.endContainer, origRange.endOffset)
         }
         sel.removeAllRanges()
@@ -268,6 +292,55 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Enter inside an inline <code> → move out of the code element first ----
+  if (e.key === 'Enter' && !mod && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const codeEl = anchor instanceof HTMLElement
+      ? anchor.closest('code')
+      : anchor?.parentElement?.closest('code')
+    // Only handle inline <code> (not code inside a <pre> block)
+    if (codeEl && !codeEl.closest('pre') && editorEl.value?.contains(codeEl)) {
+      e.preventDefault()
+      // Move cursor to just after the <code> element, then insert a new paragraph
+      const range = document.createRange()
+      range.setStartAfter(codeEl)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      // Insert a line break to create a new block after the code
+      const br = document.createElement('br')
+      range.insertNode(br)
+      range.setStartAfter(br)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      onInput()
+      return
+    }
+  }
+
+  // ---- Enter inside a <pre> code block → insert newline, don't split ----
+  if (e.key === 'Enter' && !mod && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const preEl = anchor instanceof HTMLElement
+      ? anchor.closest('pre')
+      : anchor?.parentElement?.closest('pre')
+    if (preEl && editorEl.value?.contains(preEl)) {
+      e.preventDefault()
+      const range = sel.getRangeAt(0)
+      range.deleteContents()
+      // Insert a plain newline character (preserves <pre> formatting)
+      const nl = document.createTextNode('\n')
+      range.insertNode(nl)
+      range.setStartAfter(nl)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      onInput()
+      return
+    }
+  }
+
   // Prevent default browser Ctrl+B/I (they use execCommand)
   // — the toolbar / parent will handle these via its own shortcut system
   if (mod && (e.key === 'b' || e.key === 'i')) {
@@ -276,12 +349,22 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
-/* ---- Ctrl+Click to open links ---- */
+/* ---- Ctrl+Click to open links & language label editing ---- */
+
+let activeLangInput: HTMLInputElement | null = null
 
 function onClick(e: MouseEvent): void {
+  // ---- Language label click → show inline input ----
+  const target = e.target as HTMLElement
+  if (target.classList?.contains('ce-code-lang')) {
+    e.preventDefault()
+    e.stopPropagation()
+    showLangInput(target)
+    return
+  }
+
   if (!(e.ctrlKey || e.metaKey)) return
 
-  const target = e.target as HTMLElement
   const anchor = target.closest('a') as HTMLAnchorElement | null
   if (!anchor) return
 
@@ -291,6 +374,172 @@ function onClick(e: MouseEvent): void {
   e.preventDefault()
   e.stopPropagation()
   window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+/**
+ * Show an inline <input> over the language label to let the user
+ * type a language identifier. On confirm (Enter / blur) the code
+ * block is re-highlighted.
+ */
+function showLangInput(labelEl: HTMLElement): void {
+  // Clean up any existing input
+  if (activeLangInput) {
+    activeLangInput.remove()
+    activeLangInput = null
+  }
+
+  const preEl = labelEl.closest('pre')
+  if (!preEl) return
+
+  const currentLang = labelEl.getAttribute('data-lang') || ''
+
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.className = 'ce-code-lang-input'
+  input.value = currentLang === '' ? '' : currentLang
+  input.placeholder = 'language'
+  input.setAttribute('spellcheck', 'false')
+  input.setAttribute('autocomplete', 'off')
+
+  // Position over the label
+  labelEl.style.visibility = 'hidden'
+  labelEl.insertAdjacentElement('afterend', input)
+  activeLangInput = input
+
+  input.focus()
+  input.select()
+
+  function commitLang(): void {
+    const newLang = input.value.trim().toLowerCase()
+    labelEl.style.visibility = ''
+    input.remove()
+    activeLangInput = null
+
+    // Update the label
+    labelEl.textContent = newLang || 'plain text'
+    labelEl.setAttribute('data-lang', newLang)
+
+    // Update the <code> element class
+    const codeEl = preEl!.querySelector('code')
+    if (codeEl) {
+      codeEl.className = newLang ? `language-${newLang}` : ''
+
+      // Re-highlight the code block if a highlight function is provided
+      if (props.highlight && newLang) {
+        const rawCode = codeEl.textContent || ''
+        const highlighted = props.highlight(rawCode, newLang)
+        if (highlighted) {
+          // Shiki returns <pre><code>…</code></pre>, extract the inner HTML
+          const match = highlighted.match(/<code[^>]*>([\s\S]*)<\/code>/)
+          if (match) {
+            codeEl.innerHTML = match[1]
+          }
+        }
+      } else {
+        // No highlighting — ensure we show plain text
+        const rawCode = codeEl.textContent || ''
+        codeEl.textContent = rawCode
+      }
+    }
+
+    // Trigger serialization
+    onInput()
+  }
+
+  input.addEventListener('blur', commitLang, { once: true })
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault()
+      input.blur()
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault()
+      labelEl.style.visibility = ''
+      input.remove()
+      activeLangInput = null
+    }
+  })
+}
+
+/* ---- Re-highlight code blocks on edit ---- */
+
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+function rehighlightCurrentBlock(): void {
+  if (!props.highlight || !editorEl.value) return
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return
+
+  // Check if cursor is inside a <pre>
+  let node: Node | null = sel.anchorNode
+  let preEl: HTMLPreElement | null = null
+  while (node && node !== editorEl.value) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === 'PRE') {
+      preEl = node as HTMLPreElement
+      break
+    }
+    node = node.parentNode
+  }
+  if (!preEl) return
+
+  const codeEl = preEl.querySelector('code')
+  if (!codeEl) return
+
+  const langMatch = (codeEl.className || '').match(/language-(\S+)/)
+  const lang = langMatch ? langMatch[1] : ''
+  if (!lang) return
+
+  const rawCode = codeEl.textContent || ''
+  const highlighted = props.highlight(rawCode, lang)
+  if (!highlighted) return
+
+  // Extract the inner <code> HTML from Shiki output
+  const match = highlighted.match(/<code[^>]*>([\s\S]*)<\/code>/)
+  if (!match) return
+
+  // Save cursor offset relative to the code element's text content
+  const range = sel.getRangeAt(0)
+  const preCaretRange = range.cloneRange()
+  preCaretRange.selectNodeContents(codeEl)
+  preCaretRange.setEnd(range.startContainer, range.startOffset)
+  const caretOffset = preCaretRange.toString().length
+
+  // Replace HTML
+  codeEl.innerHTML = match[1]
+
+  // Restore cursor position
+  restoreCursorInCode(codeEl, caretOffset, sel)
+}
+
+/**
+ * Walk through text nodes in `codeEl` to place the cursor at
+ * the character offset `caretOffset`.
+ */
+function restoreCursorInCode(
+  codeEl: HTMLElement,
+  caretOffset: number,
+  sel: Selection,
+): void {
+  const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
+  let remaining = caretOffset
+  let textNode: Text | null = null
+
+  while (walker.nextNode()) {
+    const tn = walker.currentNode as Text
+    if (remaining <= tn.length) {
+      textNode = tn
+      break
+    }
+    remaining -= tn.length
+  }
+
+  if (textNode) {
+    const newRange = document.createRange()
+    newRange.setStart(textNode, remaining)
+    newRange.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+  }
 }
 
 /* ---- Paste handler ---- */

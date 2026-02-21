@@ -62,6 +62,10 @@
   --ce-pre-padding: 12px 16px;
   --ce-pre-radius: 6px;
 
+  --ce-code-lang-bg: rgba(0, 0, 0, 0.06);
+  --ce-code-lang-text: #6b7280;
+  --ce-code-lang-font-size: 0.75em;
+
   --ce-blockquote-border: #6366f1;
   --ce-blockquote-border-width: 4px;
   --ce-blockquote-padding: 4px 16px;

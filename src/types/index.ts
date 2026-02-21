@@ -45,6 +45,17 @@ export interface HistoryEntry {
 /*  Props & Emits                                                      */
 /* ------------------------------------------------------------------ */
 
+export interface HighlightOptions {
+  /** Shiki theme name for light mode (default: 'github-light') */
+  theme?: string
+  /** Shiki theme name for dark mode (default: 'github-dark') */
+  darkTheme?: string
+  /** Languages to pre-load (default: common web languages) */
+  langs?: string[]
+  /** When true, uses the dark theme for syntax highlighting */
+  darkMode?: boolean
+}
+
 export interface CliveEditProps {
   /** Raw markdown string (v-model) */
   modelValue: string
@@ -58,6 +69,12 @@ export interface CliveEditProps {
   toolbarItems?: ToolbarItem[]
   /** Maximum number of undo history entries (default 100) */
   historyDepth?: number
+  /**
+   * Enable syntax highlighting in code blocks via Shiki.
+   * Requires `shiki` to be installed as a peer dependency.
+   * Pass `{}` to use defaults (github-light theme, common languages).
+   */
+  highlightOptions?: HighlightOptions
 }
 
 export type CliveEditEmits = {
@@ -85,7 +102,7 @@ export interface EditorContext {
   orderedList: () => void
   blockquote: () => void
   codeInline: () => void
-  codeBlock: () => void
+  codeBlock: (lang?: string) => void
   link: (url?: string, text?: string) => void
   image: (src?: string, alt?: string) => void
   horizontalRule: () => void

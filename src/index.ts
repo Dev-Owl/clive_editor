@@ -12,6 +12,8 @@ export type { MarkdownViewerProps } from './components/MarkdownViewer.vue'
 // Composables (for advanced / headless usage)
 export { useHistory } from './composables/useHistory'
 export { useEditor } from './composables/useEditor'
+export { useHighlighter, useInjectHighlight } from './composables/useHighlighter'
+export type { HighlightFn } from './composables/useHighlighter'
 
 // Types
 export type {
@@ -21,6 +23,7 @@ export type {
   CliveEditProps,
   CliveEditEmits,
   EditorContext,
+  HighlightOptions,
 } from './types'
 export { EDITOR_CTX_KEY } from './types'
 
