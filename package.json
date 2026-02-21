@@ -1,6 +1,6 @@
 {
   "name": "@dev_owl/cliveedit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CliveEdit — A themeable WYSIWYG markdown editor component for Vue 3",
   "type": "module",
   "main": "./dist/cliveedit.umd.js",
@@ -12,7 +12,7 @@
       "import": "./dist/cliveedit.es.js",
       "require": "./dist/cliveedit.umd.js"
     },
-    "./style.css": "./dist/editor.css"
+    "./style.css": "./dist/cliveedit.css"
   },
   "files": [
     "dist",
