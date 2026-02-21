@@ -164,24 +164,29 @@ td.addRule('strikethrough', {
 
 td.addRule('fencedCodeBlock', {
   filter(node) {
-    return (
-      node.nodeName === 'PRE' &&
-      node.firstChild !== null &&
-      // The <pre> must contain a <code> (possibly preceded by the lang label)
-      !!(node as HTMLElement).querySelector('code')
-    )
+    if (node.nodeName !== 'PRE') return false
+    const el = node as HTMLElement
+    // Match if the <pre> contains a <code> element, OR if it has a
+    // language label div (the browser may remove <code> when content
+    // is fully deleted but the label div keeps the <pre> alive).
+    return !!el.querySelector('code') || !!el.querySelector('.ce-code-lang')
   },
   replacement(_content, node) {
     const el = node as HTMLElement
     const codeEl = el.querySelector('code')
-    if (!codeEl) return _content
 
-    // Extract language from the <code> element's class
-    const classMatch = (codeEl.className || '').match(/language-(\S+)/)
-    const lang = classMatch ? classMatch[1] : ''
+    // Extract language: prefer <code class="language-…">, fall back to label div
+    let lang = ''
+    if (codeEl) {
+      const classMatch = (codeEl.className || '').match(/language-(\S+)/)
+      lang = classMatch ? classMatch[1] : ''
+    } else {
+      const labelEl = el.querySelector('.ce-code-lang')
+      lang = (labelEl as HTMLElement)?.dataset?.lang ?? ''
+    }
 
     // Get the raw text content of the code (strip any Shiki highlight spans)
-    const code = codeEl.textContent || ''
+    const code = codeEl ? (codeEl.textContent || '') : ''
 
     // Remove trailing newline that markdown-it / Shiki often adds
     const trimmed = code.replace(/\n$/, '')

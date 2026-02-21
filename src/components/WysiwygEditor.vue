@@ -1,26 +1,9 @@
 <template>
   <div class="ce-wysiwyg-wrap">
-    <TableControls
-      :editor-el="editorEl"
-      :disabled="disabled"
-      @change="onInput"
-    />
-    <div
-      ref="editorEl"
-      class="ce-wysiwyg"
-      contenteditable="true"
-      role="textbox"
-      aria-multiline="true"
-      :aria-label="placeholder || 'Rich text editor'"
-      :data-placeholder="placeholder"
-      spellcheck="true"
-      @input="onInput"
-      @keydown="onKeydown"
-      @keyup="onSelectionChange"
-      @paste="onPaste"
-      @click="onClick"
-      @mouseup="onSelectionChange"
-    />
+    <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
+    <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
+      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput"
+      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @click="onClick" @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -154,6 +137,31 @@ function onInput(): void {
     }, 300)
   }
 
+  // Repair any <pre> blocks where the browser removed the <code> element
+  // (happens when the user deletes all content — the lang label div keeps
+  // the <pre> alive visually but <code> is gone).
+  if (editorEl.value) {
+    for (const pre of editorEl.value.querySelectorAll('pre')) {
+      if (!pre.querySelector('code')) {
+        const labelEl = pre.querySelector('.ce-code-lang')
+        const lang = (labelEl as HTMLElement)?.dataset?.lang ?? ''
+        const codeEl = document.createElement('code')
+        if (lang) codeEl.className = `language-${lang}`
+        codeEl.appendChild(document.createTextNode(''))
+        pre.appendChild(codeEl)
+        // Place cursor inside the restored <code>
+        const sel = window.getSelection()
+        if (sel) {
+          const range = document.createRange()
+          range.selectNodeContents(codeEl)
+          range.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
+      }
+    }
+  }
+
   // Debounced emit of markdown value
   if (inputTimer) clearTimeout(inputTimer)
   inputTimer = setTimeout(() => {
@@ -232,11 +240,11 @@ function onKeydown(e: KeyboardEvent): void {
         const origRange = sel.getRangeAt(0)
         // Use the later start and the earlier end
         if (cell.contains(origRange.startContainer) &&
-            safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
+          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
           safeRange.setStart(origRange.startContainer, origRange.startOffset)
         }
         if (cell.contains(origRange.endContainer) &&
-            safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
+          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
           safeRange.setEnd(origRange.endContainer, origRange.endOffset)
         }
         sel.removeAllRanges()
@@ -260,11 +268,11 @@ function onKeydown(e: KeyboardEvent): void {
         safeRange.selectNodeContents(cell)
         const origRange = sel.getRangeAt(0)
         if (cell.contains(origRange.startContainer) &&
-            safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
+          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
           safeRange.setStart(origRange.startContainer, origRange.startOffset)
         }
         if (cell.contains(origRange.endContainer) &&
-            safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
+          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
           safeRange.setEnd(origRange.endContainer, origRange.endOffset)
         }
         sel.removeAllRanges()
@@ -281,6 +289,33 @@ function onKeydown(e: KeyboardEvent): void {
         onInput()
         return
       }
+    }
+  }
+
+  // ---- Enter inside an inline <code> → move out of the code element first ----
+  if (e.key === 'Enter' && !mod && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const codeEl = anchor instanceof HTMLElement
+      ? anchor.closest('code')
+      : anchor?.parentElement?.closest('code')
+    // Only handle inline <code> (not code inside a <pre> block)
+    if (codeEl && !codeEl.closest('pre') && editorEl.value?.contains(codeEl)) {
+      e.preventDefault()
+      // Move cursor to just after the <code> element, then insert a new paragraph
+      const range = document.createRange()
+      range.setStartAfter(codeEl)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      // Insert a line break to create a new block after the code
+      const br = document.createElement('br')
+      range.insertNode(br)
+      range.setStartAfter(br)
+      range.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      onInput()
+      return
     }
   }
 
