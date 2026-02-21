@@ -169,7 +169,7 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     refreshActiveState()
   }
 
-  function codeBlock(): void {
+  function codeBlock(lang?: string): void {
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0) return
 
@@ -189,7 +189,10 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
     } else {
       const text = sel.toString() || 'code'
-      insertHtmlAtCursor(`<pre><code>${escapeHtml(text)}</code></pre><p><br></p>`)
+      const displayLang = lang || 'plain text'
+      const langClass = lang ? ` class="language-${escapeAttr(lang)}"` : ''
+      const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeAttr(lang || '')}">${escapeHtml(displayLang)}</div>`
+      insertHtmlAtCursor(`<pre>${langLabel}<code${langClass}>${escapeHtml(text)}</code></pre><p><br></p>`)
     }
     refreshActiveState()
   }

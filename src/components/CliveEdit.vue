@@ -17,6 +17,7 @@
       :model-value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
+      :highlight="highlightFn ?? undefined"
       @update:model-value="onContentUpdate"
       @input="onWysiwygInput"
       @selection-change="onSelectionChange"
@@ -41,6 +42,7 @@ import MarkdownEditor from './MarkdownEditor.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import { useHistory } from '@/composables/useHistory'
 import { useEditor } from '@/composables/useEditor'
+import { useHighlighter } from '@/composables/useHighlighter'
 import type {
   CliveEditProps,
   CliveEditEmits,
@@ -79,6 +81,19 @@ const wysiwygElRef = computed(() => wysiwygRef.value?.el ?? null)
 
 const history = useHistory({ maxDepth: props.historyDepth })
 const editor = useEditor(wysiwygElRef as any)
+const {
+  init: initHighlight,
+  highlight,
+  isReady: highlightReady,
+  enabled: highlightEnabled,
+  highlightFn,
+  setEnabled: setHighlightEnabled,
+  setDarkMode: setHighlightDarkMode,
+  provideHighlight,
+} = useHighlighter()
+
+// Provide the highlight function to child components (e.g. MarkdownViewer)
+provideHighlight()
 
 /* ---- Watch mode prop (two-way) ---- */
 
@@ -92,7 +107,45 @@ watch(() => props.mode, (m) => {
 
 onMounted(() => {
   history.init(props.modelValue)
+
+  // Initialise Shiki if highlightOptions are provided
+  if (props.highlightOptions) {
+    initHighlight(props.highlightOptions).then((ok) => {
+      if (ok && currentMode.value === 'wysiwyg') {
+        // Re-render WYSIWYG with highlighting now that Shiki is loaded
+        nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
+      }
+    })
+  }
 })
+
+/* ---- Watch highlightOptions prop ---- */
+
+watch(
+  () => props.highlightOptions,
+  (opts) => {
+    if (opts) {
+      // Ensure Shiki is initialised, then enable highlighting
+      if (!highlightReady.value) {
+        initHighlight(opts).then((ok) => {
+          if (ok) {
+            setHighlightDarkMode(!!opts.darkMode)
+            nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
+          }
+        })
+      } else {
+        setHighlightEnabled(true)
+        setHighlightDarkMode(!!opts.darkMode)
+        nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
+      }
+    } else {
+      // highlightOptions removed → disable highlighting
+      setHighlightEnabled(false)
+      nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
+    }
+  },
+  { deep: true },
+)
 
 /* ---- Content updates ---- */
 
@@ -201,7 +254,7 @@ function handleMarkdownAction(action: string): void {
     case 'orderedList': md.insertSyntax('1. ', ''); break
     case 'blockquote': md.insertSyntax('> ', ''); break
     case 'codeInline': md.insertSyntax('`', '`'); break
-    case 'codeBlock': md.insertBlock('\n```\n\n```\n'); break
+    case 'codeBlock': md.insertBlock('\n```language\n\n```\n'); break
     case 'link': md.insertSyntax('[', '](url)'); break
     case 'image': md.insertSyntax('![alt](', ')'); break
     case 'horizontalRule': md.insertBlock('\n---\n'); break

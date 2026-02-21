@@ -119,6 +119,7 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 | `disabled` | `boolean` | `false` | When `true`, disables all editing and toolbar actions. |
 | `toolbarItems` | `ToolbarItem[]` | *(built-in set)* | Override the default toolbar. See [Custom Toolbar](#custom-toolbar). |
 | `historyDepth` | `number` | `100` | Maximum number of undo/redo history entries. |
+| `highlightOptions` | `{ theme?: string; langs?: string[] }` | `undefined` | Enable syntax highlighting in code blocks via [Shiki](https://shiki.matsu.io). See [Syntax Highlighting](#syntax-highlighting). |
 
 ---
 
@@ -312,6 +313,65 @@ interface ToolbarItem {
 
 ---
 
+## Syntax Highlighting
+
+CliveEdit supports syntax highlighting in fenced code blocks via [Shiki](https://shiki.matsu.io) — the same engine that powers VS Code's syntax highlighting.
+
+### Installation
+
+Shiki is an **optional** peer dependency. Install it alongside CliveEdit:
+
+```bash
+npm install shiki
+```
+
+Without Shiki installed, code blocks render as plain preformatted text — no errors.
+
+### Basic Usage
+
+```vue
+<CliveEdit
+  v-model="content"
+  :highlight-options="{
+    theme: 'github-light',
+    langs: ['javascript', 'typescript', 'python', 'html', 'css']
+  }"
+/>
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `theme` | `string` | `'github-light'` | Shiki theme name. See [Shiki Themes](https://shiki.matsu.io/themes). |
+| `langs` | `string[]` | Common web languages | Languages to pre-load. Only pre-loaded languages can be highlighted. |
+
+Pass `{}` (empty object) to use defaults with the `github-light` theme and a set of common languages.
+
+### How It Works
+
+- **Markdown mode**: Write fenced code blocks with a language identifier as usual:
+
+  ````markdown
+  ```javascript
+  const greeting = 'Hello, world!'
+  ```
+  ````
+
+- **WYSIWYG mode**: When you insert a code block, a small **language label** appears in the top-right corner of the block (initially showing "plain text"). Click the label to type a language name (e.g. `javascript`, `python`, `css`). The code is immediately re-highlighted with the correct syntax colours.
+
+- **MarkdownViewer**: Highlighted code blocks render automatically when a parent component provides the highlight function (via `CliveEdit` or `useHighlighter`).
+
+### Theming the Language Label
+
+The language label badge can be customised with CSS variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `--ce-code-lang-bg` | `rgba(0, 0, 0, 0.06)` | Label background |
+| `--ce-code-lang-text` | `#6b7280` | Label text colour |
+| `--ce-code-lang-font-size` | `0.75em` | Label font size |
+
+---
+
 ## Tables
 
 CliveEdit includes full GFM (GitHub Flavoured Markdown) table support. Tables round-trip cleanly between WYSIWYG and Markdown modes.
@@ -418,6 +478,9 @@ CliveEdit uses CSS custom properties scoped under the `.cliveedit` class. Overri
 | `--ce-code-radius` | `3px` | Inline code border radius |
 | `--ce-pre-padding` | `12px 16px` | Code block padding |
 | `--ce-pre-radius` | `6px` | Code block border radius |
+| `--ce-code-lang-bg` | `rgba(0, 0, 0, 0.06)` | Code block language label background |
+| `--ce-code-lang-text` | `#6b7280` | Code block language label text colour |
+| `--ce-code-lang-font-size` | `0.75em` | Code block language label font size |
 | `--ce-blockquote-border` | `#6366f1` | Blockquote left border colour |
 | `--ce-blockquote-border-width` | `4px` | Blockquote left border width |
 | `--ce-blockquote-padding` | `4px 16px` | Blockquote padding |
@@ -553,7 +616,7 @@ interface EditorContext {
   orderedList(): void
   blockquote(): void
   codeInline(): void
-  codeBlock(): void
+  codeBlock(lang?: string): void
   link(url?: string, text?: string): void
   image(src?: string, alt?: string): void
   horizontalRule(): void
@@ -631,6 +694,45 @@ editor.setHtml('<p>Hello</p>')
 editor.focus()
 ```
 
+### useHighlighter Composable
+
+The syntax highlighting system is available as a standalone composable for advanced or custom integrations:
+
+```ts
+import { useHighlighter } from '@dev_owl/cliveedit'
+
+const { init, highlight, isReady, provideHighlight } = useHighlighter()
+
+// Initialise Shiki (async — call once at startup)
+await init({ theme: 'github-dark', langs: ['javascript', 'python'] })
+
+// Check readiness
+isReady.value  // true after successful init
+
+// Highlight code (synchronous after init)
+const html = highlight('const x = 42', 'javascript')
+
+// Provide the highlight function to child components
+provideHighlight()
+```
+
+| Method / Property | Description |
+|---|---|
+| `init(options?)` | Initialise Shiki with the given theme and languages. Returns `Promise<boolean>`. |
+| `highlight(code, lang)` | Highlight code synchronously. Returns `''` before init. |
+| `isReady` | `Ref<boolean>` — `true` when Shiki is loaded. |
+| `highlightFn` | `Ref<HighlightFn \| null>` — reactive highlight function reference. |
+| `provideHighlight()` | Call in `setup()` to provide the highlight function to descendants via inject. |
+
+Child components can consume the highlight function:
+
+```ts
+import { useInjectHighlight } from '@dev_owl/cliveedit'
+
+const highlightFn = useInjectHighlight()
+// highlightFn.value is null until a parent calls provideHighlight()
+```
+
 ---
 
 ## TypeScript
@@ -645,6 +747,7 @@ import type {
   CliveEditProps,
   CliveEditEmits,
   EditorContext,
+  HighlightOptions,
   MarkdownViewerProps,
 } from '@dev_owl/cliveedit'
 ```

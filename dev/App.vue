@@ -7,25 +7,23 @@
     <div class="options-panel">
       <div class="options-panel__header">
         <span class="options-panel__title">Options</span>
-        <label class="toggle">
-          <input type="checkbox" v-model="darkMode" />
-          <span>Dark theme</span>
-        </label>
+        <div class="options-panel__toggles">
+          <label class="toggle">
+            <input type="checkbox" v-model="syntaxHighlight" />
+            <span>Syntax highlighting</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" v-model="darkMode" />
+            <span>Dark theme</span>
+          </label>
+        </div>
       </div>
 
       <div class="options-panel__section">
         <span class="options-panel__section-title">Toolbar features</span>
         <div class="options-panel__grid">
-          <label
-            v-for="item in allToolbarFeatures"
-            :key="item.id"
-            class="toggle"
-          >
-            <input
-              type="checkbox"
-              :checked="enabledFeatures[item.id]"
-              @change="toggleFeature(item.id)"
-            />
+          <label v-for="item in allToolbarFeatures" :key="item.id" class="toggle">
+            <input type="checkbox" :checked="enabledFeatures[item.id]" @change="toggleFeature(item.id)" />
             <span>{{ item.label }}</span>
           </label>
         </div>
@@ -38,12 +36,9 @@
 
     <!-- Editor -->
     <div :class="{ 'dark-theme': darkMode }">
-      <CliveEdit
-        v-model="markdown"
-        v-model:mode="mode"
-        :toolbar-items="activeToolbarItems"
-        placeholder="Start writing something amazing..."
-      />
+      <CliveEdit v-model="markdown" v-model:mode="mode" :toolbar-items="activeToolbarItems"
+        :highlight-options="syntaxHighlight ? highlightConfig : undefined"
+        placeholder="Start writing something amazing..." />
     </div>
 
     <!-- Debug output -->
@@ -59,9 +54,11 @@
 
     <!-- Markdown Viewer showcase -->
     <h2 class="section-heading">MarkdownViewer — Read-only Renderer</h2>
-    <p class="subtitle">The same markdown rendered as a read-only view. Use <code>&lt;MarkdownViewer v-model="md" /&gt;</code> for display-only scenarios.</p>
+    <p class="subtitle">The same markdown rendered as a read-only view. Use
+      <code>&lt;MarkdownViewer v-model="md" /&gt;</code> for display-only scenarios.
+    </p>
     <div :class="{ 'dark-theme': darkMode }">
-      <MarkdownViewer v-model="markdown" />
+      <MarkdownViewer v-model="markdown" :highlight-options="syntaxHighlight ? highlightConfig : undefined" />
     </div>
   </div>
 </template>
@@ -94,8 +91,19 @@ import readmeContent from '../README.md?raw'
 /* ---- State ---- */
 
 const darkMode = ref(false)
+const syntaxHighlight = ref(true)
 const mode = ref<EditorMode>('wysiwyg')
 const markdown = ref(readmeContent)
+
+const highlightConfig = computed(() => ({
+  theme: 'github-light',
+  darkTheme: 'github-dark',
+  darkMode: darkMode.value,
+  langs: [
+    'javascript', 'typescript', 'vue', 'html', 'css', 'json',
+    'python', 'bash', 'shell', 'markdown', 'jsx', 'tsx', 'csharp'
+  ],
+}))
 
 /* ---- Toolbar feature definitions ---- */
 
@@ -313,6 +321,11 @@ h1 {
   padding: 10px 14px;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.options-panel__toggles {
+  display: flex;
+  gap: 16px;
 }
 
 .options-panel__title {

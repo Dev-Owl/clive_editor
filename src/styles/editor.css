@@ -77,12 +77,14 @@
   margin: var(--ce-h1-margin);
   line-height: var(--ce-h1-line-height);
 }
+
 .ce-wysiwyg h2 {
   font-size: var(--ce-h2-font-size);
   font-weight: var(--ce-h2-font-weight);
   margin: var(--ce-h2-margin);
   line-height: var(--ce-h2-line-height);
 }
+
 .ce-wysiwyg h3 {
   font-size: var(--ce-h3-font-size);
   font-weight: var(--ce-h3-font-weight);
@@ -134,6 +136,7 @@
   padding: var(--ce-pre-padding);
   overflow-x: auto;
   margin: var(--ce-content-margin);
+  position: relative;
 }
 
 .ce-wysiwyg pre code {
@@ -142,6 +145,53 @@
   padding: 0;
   border-radius: 0;
   font-size: var(--ce-code-font-size);
+}
+
+/* Override Shiki's inline styles on <pre> so our CSS variables control the look */
+.ce-wysiwyg pre[style] {
+  background: var(--ce-code-bg) !important;
+}
+
+/* ---- Language label (inside <pre>) ---- */
+
+.ce-wysiwyg .ce-code-lang,
+.ce-viewer__content .ce-code-lang {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: var(--ce-code-lang-bg);
+  color: var(--ce-code-lang-text);
+  font-family: var(--ce-font-family);
+  font-size: var(--ce-code-lang-font-size);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.4;
+  z-index: 1;
+}
+
+.ce-wysiwyg .ce-code-lang:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* ---- Inline language input ---- */
+
+.ce-wysiwyg .ce-code-lang-input {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: var(--ce-bg);
+  color: var(--ce-text);
+  font-family: var(--ce-font-family);
+  font-size: var(--ce-code-lang-font-size);
+  padding: 2px 8px;
+  border: 1px solid var(--ce-border);
+  border-radius: 4px;
+  outline: none;
+  width: 100px;
+  line-height: 1.4;
+  z-index: 2;
 }
 
 .ce-wysiwyg blockquote {
@@ -162,7 +212,7 @@
   margin: 0;
 }
 
-.ce-wysiwyg li > p {
+.ce-wysiwyg li>p {
   margin: 0;
 }
 
@@ -300,12 +350,14 @@
   margin: var(--ce-h1-margin);
   line-height: var(--ce-h1-line-height);
 }
+
 .ce-viewer__content h2 {
   font-size: var(--ce-h2-font-size);
   font-weight: var(--ce-h2-font-weight);
   margin: var(--ce-h2-margin);
   line-height: var(--ce-h2-line-height);
 }
+
 .ce-viewer__content h3 {
   font-size: var(--ce-h3-font-size);
   font-weight: var(--ce-h3-font-weight);
@@ -354,6 +406,7 @@
   padding: var(--ce-pre-padding);
   overflow-x: auto;
   margin: var(--ce-content-margin);
+  position: relative;
 }
 
 .ce-viewer__content pre code {
@@ -362,6 +415,11 @@
   padding: 0;
   border-radius: 0;
   font-size: var(--ce-code-font-size);
+}
+
+/* Override Shiki's inline styles on <pre> so our CSS variables control the look */
+.ce-viewer__content pre[style] {
+  background: var(--ce-code-bg) !important;
 }
 
 .ce-viewer__content blockquote {
@@ -382,7 +440,7 @@
   margin: 0;
 }
 
-.ce-viewer__content li > p {
+.ce-viewer__content li>p {
   margin: 0;
 }
 
