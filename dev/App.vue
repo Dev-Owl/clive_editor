@@ -76,6 +76,8 @@ import {
   Heading3,
   List,
   ListOrdered,
+  IndentIncrease,
+  IndentDecrease,
   Quote,
   Code,
   CodeXml,
@@ -173,6 +175,20 @@ const allToolbarFeatures: FeatureDef[] = [
     toolbarItem: {
       id: 'orderedList', label: 'Ordered List', icon: ListOrdered, action: 'orderedList',
       active: (ctx) => ctx.isActive('ol'),
+    },
+  },
+  {
+    id: 'indentList', label: 'Indent List',
+    toolbarItem: {
+      id: 'indentList', label: 'Indent List', icon: IndentIncrease, action: 'indentList',
+      shortcut: 'Tab',
+    },
+  },
+  {
+    id: 'outdentList', label: 'Outdent List',
+    toolbarItem: {
+      id: 'outdentList', label: 'Outdent List', icon: IndentDecrease, action: 'outdentList',
+      shortcut: 'Shift+Tab',
     },
   },
   {

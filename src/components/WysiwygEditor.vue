@@ -16,6 +16,7 @@ import {
   isSelectionCrossCell,
   handleCrossCellDelete,
   getAdjacentCell,
+  isInsideTag,
 } from '@/utils/selection'
 import TableControls from './TableControls.vue'
 
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   input: []
   selectionChange: []
+  action: [actionName: string]
 }>()
 
 /* ---- Refs ---- */
@@ -289,6 +291,15 @@ function onKeydown(e: KeyboardEvent): void {
         onInput()
         return
       }
+    }
+  }
+
+  // ---- Tab / Shift+Tab inside a list → indent / outdent ----
+  if (e.key === 'Tab' && sel && sel.rangeCount > 0) {
+    if (isInsideTag('li')) {
+      e.preventDefault()
+      emit('action', e.shiftKey ? 'outdentList' : 'indentList')
+      return
     }
   }
 

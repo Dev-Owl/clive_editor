@@ -100,6 +100,8 @@ export interface EditorContext {
   heading: (level: 1 | 2 | 3) => void
   bulletList: () => void
   orderedList: () => void
+  indentList: () => void
+  outdentList: () => void
   blockquote: () => void
   codeInline: () => void
   codeBlock: (lang?: string) => void
