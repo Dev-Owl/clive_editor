@@ -303,6 +303,57 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Enter inside a heading → exit to a new paragraph ----
+  if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const headingEl = anchor instanceof HTMLElement
+      ? anchor.closest('h1, h2, h3, h4, h5, h6')
+      : anchor?.parentElement?.closest('h1, h2, h3, h4, h5, h6')
+
+    if (headingEl && editorEl.value?.contains(headingEl)) {
+      e.preventDefault()
+      const headingText = headingEl.textContent || ''
+
+      if (!headingText.trim()) {
+        // Empty heading → convert to plain paragraph
+        const p = document.createElement('p')
+        p.innerHTML = '<br>'
+        headingEl.parentNode?.replaceChild(p, headingEl)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(p)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      } else {
+        // Has content → split at cursor, keep before in heading, after in <p>
+        const range = sel.getRangeAt(0)
+        const afterRange = document.createRange()
+        afterRange.setStart(range.endContainer, range.endOffset)
+        afterRange.setEnd(headingEl, headingEl.childNodes.length)
+        const afterContent = afterRange.extractContents()
+
+        const p = document.createElement('p')
+        if (afterContent.textContent?.trim()) {
+          p.appendChild(afterContent)
+        } else {
+          p.innerHTML = '<br>'
+        }
+
+        headingEl.parentNode?.insertBefore(p, headingEl.nextSibling)
+
+        // Place cursor at start of new paragraph
+        const newRange = document.createRange()
+        newRange.selectNodeContents(p)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      }
+
+      onInput()
+      return
+    }
+  }
+
   // ---- Enter inside an inline <code> → move out of the code element first ----
   if (e.key === 'Enter' && !mod && sel && sel.rangeCount > 0) {
     const anchor = sel.anchorNode

@@ -71,6 +71,8 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     if (!sel || sel.rangeCount === 0) return
     if (findClosestCell(sel.anchorNode)) return
 
+    const targetTag = `H${level}`
+
     // Find the closest block element
     let block = sel.anchorNode as Node | null
     while (block && block !== el) {
@@ -84,23 +86,60 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     }
 
     if (!block || block === el) {
-      // No block found — wrap current line
-      const tag = `h${level}`
-      wrapBlock(tag, el)
+      // No block found — insert a new heading with default text
+      const h = document.createElement(targetTag)
+      h.textContent = 'Heading'
+      const range = sel.getRangeAt(0)
+      range.deleteContents()
+      range.insertNode(h)
+      // Ensure heading is not nested inside another inline/block accidentally
+      // by moving it to editor root if needed
+      if (h.parentElement && h.parentElement !== el) {
+        el.insertBefore(h, h.parentElement.nextSibling)
+      }
+      // Select the default text so the user can type to replace
+      const newRange = document.createRange()
+      newRange.selectNodeContents(h)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
     } else {
       const currentTag = (block as HTMLElement).tagName
-      const targetTag = `H${level}`
 
       if (currentTag === targetTag) {
         // Toggle off → convert to <p>
         const p = document.createElement('p')
         p.innerHTML = (block as HTMLElement).innerHTML
         block.parentNode?.replaceChild(p, block)
+        // Place cursor in the paragraph
+        const range = document.createRange()
+        range.selectNodeContents(p)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
       } else {
         // Convert to the target heading
+        const blockContent = (block as HTMLElement).textContent || ''
+        const blockInner = (block as HTMLElement).innerHTML
         const h = document.createElement(targetTag)
-        h.innerHTML = (block as HTMLElement).innerHTML
+        // If block is empty, insert default "Heading" text
+        if (!blockContent.trim() || blockInner === '<br>') {
+          h.textContent = 'Heading'
+        } else {
+          h.innerHTML = blockInner
+        }
         block.parentNode?.replaceChild(h, block)
+        // Select default text so user can replace, or place cursor at end
+        const range = document.createRange()
+        range.selectNodeContents(h)
+        if (!blockContent.trim() || blockInner === '<br>') {
+          // Select so user can immediately type replacement
+          sel.removeAllRanges()
+          sel.addRange(range)
+        } else {
+          range.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
       }
     }
     refreshActiveState()
