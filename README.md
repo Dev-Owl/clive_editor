@@ -220,6 +220,8 @@ These shortcuts work in both WYSIWYG and Markdown modes:
 | `Ctrl+K` / `Cmd+K` | Insert link |
 | `Ctrl+Z` / `Cmd+Z` | Undo |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
+| `Tab` (inside list) | Indent list item (increase nesting) |
+| `Shift+Tab` (inside list) | Outdent list item (decrease nesting) |
 | `Ctrl+Click` / `Cmd+Click` | Open link under cursor in a new tab |
 | `Tab` (inside table) | Move to next cell |
 | `Shift+Tab` (inside table) | Move to previous cell |
@@ -231,7 +233,7 @@ These shortcuts work in both WYSIWYG and Markdown modes:
 
 ### Default Toolbar Items
 
-The built-in toolbar includes 17 buttons plus a mode toggle:
+The built-in toolbar includes 19 buttons plus a mode toggle:
 
 | Button | Icon | Action | Active When |
 |---|---|---|---|
@@ -245,6 +247,8 @@ The built-in toolbar includes 17 buttons plus a mode toggle:
 | — | *separator* | | |
 | **Bullet List** | `List` | Toggle `<ul>` / `- ` | Cursor inside unordered list |
 | **Ordered List** | `ListOrdered` | Toggle `<ol>` / `1. ` | Cursor inside ordered list |
+| **Indent List** | `IndentIncrease` | Nest list item one level deeper | — |
+| **Outdent List** | `IndentDecrease` | Un-nest list item one level | — |
 | — | *separator* | | |
 | **Blockquote** | `Quote` | Toggle `<blockquote>` / `> ` | Cursor inside blockquote |
 | **Inline Code** | `Code` | Toggle `<code>` / `` ` `` | Cursor inside code |
@@ -624,6 +628,8 @@ interface EditorContext {
   heading(level: 1 | 2 | 3): void
   bulletList(): void
   orderedList(): void
+  indentList(): void
+  outdentList(): void
   blockquote(): void
   codeInline(): void
   codeBlock(lang?: string): void

@@ -150,14 +150,175 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
         listNode.parentNode?.replaceChild(frag, listNode)
       }
     } else {
-      // Create a new list with the current selection / block
-      const text = sel.toString() || 'List item'
-      const html = `<${listTag}><li>${text}</li></${listTag}>`
+      // Collect block-level nodes that intersect the selection
       const range = sel.getRangeAt(0)
-      range.deleteContents()
-      insertHtmlAtCursor(html)
+      const blocks = getSelectedBlocks(range, el)
+
+      if (blocks.length > 1) {
+        // Multiple blocks selected → each becomes a list item
+        const list = document.createElement(listTag)
+        for (const block of blocks) {
+          const li = document.createElement('li')
+          li.innerHTML = (block as HTMLElement).innerHTML ?? block.textContent ?? ''
+          list.appendChild(li)
+        }
+        // Insert the list before the first block, then remove all original blocks
+        blocks[0].parentNode?.insertBefore(list, blocks[0])
+        for (const block of blocks) {
+          block.parentNode?.removeChild(block)
+        }
+        // Place cursor at end of list
+        const newRange = document.createRange()
+        newRange.selectNodeContents(list.lastElementChild || list)
+        newRange.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      } else {
+        // Single line or collapsed — create a list with one item
+        const text = sel.toString() || 'List item'
+        const lines = text.split('\n').filter(l => l.trim() !== '')
+        const items = lines.length > 0
+          ? lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')
+          : '<li>List item</li>'
+        const html = `<${listTag}>${items}</${listTag}>`
+        range.deleteContents()
+        insertHtmlAtCursor(html)
+      }
     }
     refreshActiveState()
+  }
+
+  /**
+   * Collect all block-level nodes that intersect the given range
+   * within the editor element.
+   */
+  function getSelectedBlocks(range: Range, container: HTMLElement): Node[] {
+    const blocks: Node[] = []
+    const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'])
+
+    // Walk direct children of the container (top-level blocks)
+    for (const child of Array.from(container.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && blockTags.has((child as HTMLElement).tagName)) {
+        // Check if this block intersects the range
+        const nodeRange = document.createRange()
+        nodeRange.selectNodeContents(child)
+        if (
+          range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0 &&
+          range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0
+        ) {
+          blocks.push(child)
+        }
+      }
+    }
+    return blocks
+  }
+
+  /* ---- list indent / outdent ---- */
+
+  function indentList(): void {
+    const el = editorRef.value
+    if (!el) return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+
+    // Find the <li> the cursor is in
+    const li = findAncestorTag(sel.anchorNode, 'LI', el)
+    if (!li) return
+
+    // Must have a previous sibling <li> to nest into
+    const prevLi = li.previousElementSibling
+    if (!prevLi || prevLi.tagName !== 'LI') return
+
+    // Determine the list type from the parent
+    const parentList = li.parentElement
+    if (!parentList || (parentList.tagName !== 'UL' && parentList.tagName !== 'OL')) return
+    const listTag = parentList.tagName.toLowerCase() as 'ul' | 'ol'
+
+    // Check if prevLi already has a nested sub-list
+    let subList = prevLi.querySelector(':scope > ul, :scope > ol') as HTMLElement | null
+    if (!subList) {
+      subList = document.createElement(listTag)
+      prevLi.appendChild(subList)
+    }
+
+    // Move current li into the sub-list
+    subList.appendChild(li)
+
+    // Restore cursor
+    const newRange = document.createRange()
+    newRange.selectNodeContents(li)
+    newRange.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+    refreshActiveState()
+  }
+
+  function outdentList(): void {
+    const el = editorRef.value
+    if (!el) return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+
+    // Find the <li> the cursor is in
+    const li = findAncestorTag(sel.anchorNode, 'LI', el)
+    if (!li) return
+
+    // The <li> must be inside a nested list (parent list inside another <li>)
+    const parentList = li.parentElement
+    if (!parentList || (parentList.tagName !== 'UL' && parentList.tagName !== 'OL')) return
+
+    const grandparentLi = parentList.parentElement
+    if (!grandparentLi || grandparentLi.tagName !== 'LI') return
+
+    const grandparentList = grandparentLi.parentElement
+    if (!grandparentList || (grandparentList.tagName !== 'UL' && grandparentList.tagName !== 'OL')) return
+
+    // Move any subsequent siblings of li into a new sub-list that stays nested
+    const siblingsAfter: HTMLElement[] = []
+    let next = li.nextElementSibling
+    while (next) {
+      siblingsAfter.push(next as HTMLElement)
+      next = next.nextElementSibling
+    }
+    if (siblingsAfter.length > 0) {
+      const newSubList = document.createElement(parentList.tagName.toLowerCase())
+      for (const sib of siblingsAfter) {
+        newSubList.appendChild(sib)
+      }
+      li.appendChild(newSubList)
+    }
+
+    // Insert li after the grandparent <li> in the grandparent list
+    grandparentList.insertBefore(li, grandparentLi.nextSibling)
+
+    // If the old parent list is now empty, remove it
+    if (parentList.children.length === 0) {
+      parentList.parentNode?.removeChild(parentList)
+    }
+
+    // Restore cursor
+    const newRange = document.createRange()
+    newRange.selectNodeContents(li)
+    newRange.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+    refreshActiveState()
+  }
+
+  /**
+   * Walk up from `node` to find the closest element matching `tagName`.
+   * Stops at the `boundary` element.
+   */
+  function findAncestorTag(node: Node | null, tagName: string, boundary: HTMLElement): HTMLElement | null {
+    const tag = tagName.toUpperCase()
+    let current = node
+    while (current && current !== boundary) {
+      if (current.nodeType === Node.ELEMENT_NODE && (current as HTMLElement).tagName === tag) {
+        return current as HTMLElement
+      }
+      current = current.parentNode
+    }
+    return null
   }
 
   /* ---- block-level ---- */
@@ -284,6 +445,8 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     heading,
     bulletList,
     orderedList,
+    indentList,
+    outdentList,
     blockquote,
     codeInline,
     codeBlock,

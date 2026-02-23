@@ -21,6 +21,7 @@
       @update:model-value="onContentUpdate"
       @input="onWysiwygInput"
       @selection-change="onSelectionChange"
+      @action="handleToolbarAction"
     />
 
     <!-- Markdown Editor -->
@@ -217,6 +218,8 @@ function handleWysiwygAction(action: string): void {
     case 'heading3': editor.heading(3); break
     case 'bulletList': editor.bulletList(); break
     case 'orderedList': editor.orderedList(); break
+    case 'indentList': editor.indentList(); break
+    case 'outdentList': editor.outdentList(); break
     case 'blockquote': editor.blockquote(); break
     case 'codeInline': editor.codeInline(); break
     case 'codeBlock': editor.codeBlock(); break
@@ -319,6 +322,8 @@ const editorContext = reactive<EditorContext>({
   heading: (level: 1 | 2 | 3) => handleToolbarAction(`heading${level}`),
   bulletList: () => handleToolbarAction('bulletList'),
   orderedList: () => handleToolbarAction('orderedList'),
+  indentList: () => handleToolbarAction('indentList'),
+  outdentList: () => handleToolbarAction('outdentList'),
   blockquote: () => handleToolbarAction('blockquote'),
   codeInline: () => handleToolbarAction('codeInline'),
   codeBlock: () => handleToolbarAction('codeBlock'),
