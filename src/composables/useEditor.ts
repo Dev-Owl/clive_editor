@@ -71,6 +71,8 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     if (!sel || sel.rangeCount === 0) return
     if (findClosestCell(sel.anchorNode)) return
 
+    const targetTag = `H${level}`
+
     // Find the closest block element
     let block = sel.anchorNode as Node | null
     while (block && block !== el) {
@@ -84,23 +86,60 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     }
 
     if (!block || block === el) {
-      // No block found — wrap current line
-      const tag = `h${level}`
-      wrapBlock(tag, el)
+      // No block found — insert a new heading with default text
+      const h = document.createElement(targetTag)
+      h.textContent = 'Heading'
+      const range = sel.getRangeAt(0)
+      range.deleteContents()
+      range.insertNode(h)
+      // Ensure heading is not nested inside another inline/block accidentally
+      // by moving it to editor root if needed
+      if (h.parentElement && h.parentElement !== el) {
+        el.insertBefore(h, h.parentElement.nextSibling)
+      }
+      // Select the default text so the user can type to replace
+      const newRange = document.createRange()
+      newRange.selectNodeContents(h)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
     } else {
       const currentTag = (block as HTMLElement).tagName
-      const targetTag = `H${level}`
 
       if (currentTag === targetTag) {
         // Toggle off → convert to <p>
         const p = document.createElement('p')
         p.innerHTML = (block as HTMLElement).innerHTML
         block.parentNode?.replaceChild(p, block)
+        // Place cursor in the paragraph
+        const range = document.createRange()
+        range.selectNodeContents(p)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
       } else {
         // Convert to the target heading
+        const blockContent = (block as HTMLElement).textContent || ''
+        const blockInner = (block as HTMLElement).innerHTML
         const h = document.createElement(targetTag)
-        h.innerHTML = (block as HTMLElement).innerHTML
+        // If block is empty, insert default "Heading" text
+        if (!blockContent.trim() || blockInner === '<br>') {
+          h.textContent = 'Heading'
+        } else {
+          h.innerHTML = blockInner
+        }
         block.parentNode?.replaceChild(h, block)
+        // Select default text so user can replace, or place cursor at end
+        const range = document.createRange()
+        range.selectNodeContents(h)
+        if (!blockContent.trim() || blockInner === '<br>') {
+          // Select so user can immediately type replacement
+          sel.removeAllRanges()
+          sel.addRange(range)
+        } else {
+          range.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
       }
     }
     refreshActiveState()
@@ -126,7 +165,10 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     // Guard: don't insert lists inside table cells
     if (findClosestCell(sel.anchorNode)) return
 
-    // Check if already inside this list type
+    // Determine the opposite list type
+    const otherTag: 'ul' | 'ol' = listTag === 'ul' ? 'ol' : 'ul'
+
+    // Check if already inside the *same* list type → unwrap
     if (isInsideTag(listTag)) {
       // Unwrap — convert list items back to paragraphs
       let listNode = sel.anchorNode as Node | null
@@ -141,13 +183,50 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
       if (listNode && listNode !== el) {
         const frag = document.createDocumentFragment()
-        const items = Array.from((listNode as HTMLElement).querySelectorAll('li'))
+        const items = Array.from(
+          (listNode as HTMLElement).querySelectorAll(':scope > li'),
+        )
         for (const li of items) {
           const p = document.createElement('p')
           p.innerHTML = li.innerHTML
           frag.appendChild(p)
         }
         listNode.parentNode?.replaceChild(frag, listNode)
+      }
+    } else if (isInsideTag(otherTag)) {
+      // Inside the opposite list type → convert to the target type
+      // Find the outermost list of the other type
+      let listNode = sel.anchorNode as Node | null
+      let outermostList: HTMLElement | null = null
+      while (listNode && listNode !== el) {
+        if (
+          listNode.nodeType === Node.ELEMENT_NODE &&
+          ((listNode as HTMLElement).tagName === 'UL' ||
+            (listNode as HTMLElement).tagName === 'OL')
+        ) {
+          outermostList = listNode as HTMLElement
+        }
+        listNode = listNode.parentNode
+      }
+      if (outermostList) {
+        // Save cursor position
+        const range = sel.getRangeAt(0)
+        const savedStartContainer = range.startContainer
+        const savedStartOffset = range.startOffset
+
+        // Recursively convert all list elements (including nested) to the target tag
+        convertListType(outermostList, listTag)
+
+        // Restore cursor
+        try {
+          const newRange = document.createRange()
+          newRange.setStart(savedStartContainer, savedStartOffset)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        } catch {
+          // If cursor restoration fails, place at end of converted list
+        }
       }
     } else {
       // Collect block-level nodes that intersect the selection
@@ -211,6 +290,36 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
     }
     return blocks
+  }
+
+  /**
+   * Recursively convert a list element (and all nested sub-lists)
+   * from one type to another (ul ↔ ol) in place.
+   */
+  function convertListType(
+    listEl: HTMLElement,
+    targetTag: 'ul' | 'ol',
+  ): HTMLElement {
+    // First, recursively convert any nested lists inside child <li> elements
+    for (const li of Array.from(listEl.querySelectorAll(':scope > li'))) {
+      for (const nested of Array.from(
+        li.querySelectorAll(':scope > ul, :scope > ol'),
+      )) {
+        convertListType(nested as HTMLElement, targetTag)
+      }
+    }
+
+    // Now convert this list element itself
+    const tag = targetTag.toUpperCase()
+    if (listEl.tagName === tag) return listEl // already correct type
+
+    const newList = document.createElement(targetTag)
+    // Move all children (li elements, etc.) to the new list
+    while (listEl.firstChild) {
+      newList.appendChild(listEl.firstChild)
+    }
+    listEl.parentNode?.replaceChild(newList, listEl)
+    return newList
   }
 
   /* ---- list indent / outdent ---- */

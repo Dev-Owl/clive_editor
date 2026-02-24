@@ -1,5 +1,5 @@
 <template>
-  <div class="cliveedit ce-editor-wrap" :class="{ 'ce-disabled': disabled }">
+  <div class="cliveedit ce-editor-wrap" :class="{ 'ce-disabled': disabled }" @keydown="onRootKeydown">
     <!-- Toolbar -->
     <EditorToolbar
       :mode="currentMode"
@@ -292,7 +292,7 @@ function doRedo(): void {
 function onRootKeydown(e: KeyboardEvent): void {
   if (props.disabled) return
   const mod = e.ctrlKey || e.metaKey
-
+ console.log('keydown', { key: e.key, mod, shift: e.shiftKey });
   if (mod && e.key === 'b') {
     e.preventDefault()
     handleToolbarAction('bold')
@@ -302,7 +302,7 @@ function onRootKeydown(e: KeyboardEvent): void {
   } else if (mod && e.key === 'k') {
     e.preventDefault()
     handleToolbarAction('link')
-  } else if (mod && e.shiftKey && e.key === 'z') {
+  } else if (mod && e.shiftKey && e.key.toLocaleLowerCase() === 'z') {
     e.preventDefault()
     doRedo()
   } else if (mod && e.key === 'z') {

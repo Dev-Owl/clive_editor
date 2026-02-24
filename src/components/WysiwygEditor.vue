@@ -303,6 +303,120 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Enter on empty line inside a blockquote → exit the blockquote ----
+  if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const bqEl = anchor instanceof HTMLElement
+      ? anchor.closest('blockquote')
+      : anchor?.parentElement?.closest('blockquote')
+
+    if (bqEl && editorEl.value?.contains(bqEl)) {
+      // Find the block (p/div) the cursor is currently in within the blockquote
+      let curBlock: HTMLElement | null = null
+      let node: Node | null = anchor
+      while (node && node !== bqEl) {
+        if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          /^(P|DIV)$/.test((node as HTMLElement).tagName)
+        ) {
+          curBlock = node as HTMLElement
+          break
+        }
+        node = node.parentNode
+      }
+
+      // Check if the current line is empty (empty <p>, only <br>, or bare empty text)
+      const isEmpty = curBlock
+        ? !curBlock.textContent?.trim() || curBlock.innerHTML === '<br>'
+        : !anchor?.textContent?.trim()
+
+      if (isEmpty) {
+        e.preventDefault()
+
+        // Remove the empty block from the blockquote
+        if (curBlock) {
+          curBlock.remove()
+        }
+
+        // If blockquote is now empty, remove it entirely
+        if (!bqEl.textContent?.trim() || bqEl.innerHTML === '' || bqEl.innerHTML === '<br>') {
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          bqEl.parentNode?.replaceChild(p, bqEl)
+          const newRange = document.createRange()
+          newRange.selectNodeContents(p)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        } else {
+          // Blockquote still has content — insert a <p> after the blockquote
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          bqEl.parentNode?.insertBefore(p, bqEl.nextSibling)
+          const newRange = document.createRange()
+          newRange.selectNodeContents(p)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        }
+
+        onInput()
+        return
+      }
+    }
+  }
+
+  // ---- Enter inside a heading → exit to a new paragraph ----
+  if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const headingEl = anchor instanceof HTMLElement
+      ? anchor.closest('h1, h2, h3, h4, h5, h6')
+      : anchor?.parentElement?.closest('h1, h2, h3, h4, h5, h6')
+
+    if (headingEl && editorEl.value?.contains(headingEl)) {
+      e.preventDefault()
+      const headingText = headingEl.textContent || ''
+
+      if (!headingText.trim()) {
+        // Empty heading → convert to plain paragraph
+        const p = document.createElement('p')
+        p.innerHTML = '<br>'
+        headingEl.parentNode?.replaceChild(p, headingEl)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(p)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      } else {
+        // Has content → split at cursor, keep before in heading, after in <p>
+        const range = sel.getRangeAt(0)
+        const afterRange = document.createRange()
+        afterRange.setStart(range.endContainer, range.endOffset)
+        afterRange.setEnd(headingEl, headingEl.childNodes.length)
+        const afterContent = afterRange.extractContents()
+
+        const p = document.createElement('p')
+        if (afterContent.textContent?.trim()) {
+          p.appendChild(afterContent)
+        } else {
+          p.innerHTML = '<br>'
+        }
+
+        headingEl.parentNode?.insertBefore(p, headingEl.nextSibling)
+
+        // Place cursor at start of new paragraph
+        const newRange = document.createRange()
+        newRange.selectNodeContents(p)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      }
+
+      onInput()
+      return
+    }
+  }
+
   // ---- Enter inside an inline <code> → move out of the code element first ----
   if (e.key === 'Enter' && !mod && sel && sel.rangeCount > 0) {
     const anchor = sel.anchorNode
