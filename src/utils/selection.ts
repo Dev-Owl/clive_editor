@@ -73,6 +73,22 @@ export function wrapSelection(tagName: string): void {
 
   // Wrap
   const wrapper = document.createElement(tagName)
+
+  if (range.collapsed) {
+    // No text selected — insert placeholder content so the element is
+    // visible and interactable.  For <code> use a non-breaking space;
+    // for other inline tags use a zero-width space.
+    const placeholder = tagName.toLowerCase() === 'code' ? '\u00A0' : '\u200B'
+    wrapper.textContent = placeholder
+    range.insertNode(wrapper)
+    // Select the placeholder so the user can immediately type to replace
+    sel.removeAllRanges()
+    const newRange = document.createRange()
+    newRange.selectNodeContents(wrapper)
+    sel.addRange(newRange)
+    return
+  }
+
   try {
     range.surroundContents(wrapper)
   } catch {
@@ -105,6 +121,43 @@ export function wrapBlock(tagName: string, editorEl: HTMLElement): void {
 
   const block = findClosestBlock(sel.anchorNode, editorEl)
   if (!block) return
+
+  // If the block is the editor root itself, the cursor is on bare text
+  // with no wrapping <p>. Wrap that text in a <p> first, then proceed.
+  if (block === editorEl) {
+    const range = sel.getRangeAt(0)
+    // Find the top-level node the cursor is inside
+    let targetNode: Node | null = sel.anchorNode
+    while (targetNode && targetNode.parentNode !== editorEl) {
+      targetNode = targetNode.parentNode
+    }
+    if (!targetNode) {
+      // Editor is completely empty — create a paragraph with placeholder
+      const p = document.createElement('p')
+      p.innerHTML = '<br>'
+      editorEl.appendChild(p)
+      targetNode = p
+    }
+    // If it's a bare text node (or inline), wrap it in a <p>
+    if (targetNode.nodeType === Node.TEXT_NODE ||
+        (targetNode.nodeType === Node.ELEMENT_NODE &&
+         !new Set(['P','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','UL','OL']).has((targetNode as HTMLElement).tagName))) {
+      const p = document.createElement('p')
+      editorEl.insertBefore(p, targetNode)
+      p.appendChild(targetNode)
+      targetNode = p
+    }
+    // Now wrap the <p> in the target block element
+    const wrapper = document.createElement(tagName)
+    targetNode.parentNode?.insertBefore(wrapper, targetNode)
+    wrapper.appendChild(targetNode)
+    const newRange = document.createRange()
+    newRange.selectNodeContents(wrapper)
+    newRange.collapse(false)
+    sel.removeAllRanges()
+    sel.addRange(newRange)
+    return
+  }
 
   const ancestor = findAncestor(block, tagName)
   if (ancestor && ancestor !== editorEl) {
