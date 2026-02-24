@@ -64,9 +64,34 @@ export function wrapSelection(tagName: string): void {
 
   const range = sel.getRangeAt(0)
 
-  // Check if selection is already within this tag → unwrap
+  // Check if selection is already within this tag → unwrap or exit
   const ancestor = findAncestor(range.commonAncestorContainer, tagName)
   if (ancestor) {
+    // If the selection is collapsed (no text selected) and the tag is an
+    // inline formatting tag, don't unwrap — just move the cursor outside
+    // the styled element so new text won't carry the style.
+    const inlineTags = new Set(['STRONG', 'EM', 'DEL', 'S', 'CODE'])
+    if (range.collapsed && inlineTags.has(ancestor.tagName)) {
+      // Clean up: if the element is empty or only contains a ZWS, remove it
+      const text = ancestor.textContent || ''
+      if (!text || text === '\u200B') {
+        unwrapNode(ancestor)
+        return
+      }
+      // Move cursor to just after the styled element
+      const newRange = document.createRange()
+      newRange.setStartAfter(ancestor)
+      newRange.collapse(true)
+      // Insert a zero-width space after the element to ensure the cursor
+      // lands outside it (browsers tend to pull the cursor back inside)
+      const zws = document.createTextNode('\u200B')
+      newRange.insertNode(zws)
+      newRange.setStartAfter(zws)
+      newRange.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
+      return
+    }
     unwrapNode(ancestor)
     return
   }
