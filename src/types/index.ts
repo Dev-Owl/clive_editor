@@ -70,6 +70,12 @@ export interface CliveEditProps {
   /** Maximum number of undo history entries (default 100) */
   historyDepth?: number
   /**
+   * Keep the toolbar pinned at the top of the viewport when scrolling.
+   * Enabled by default to support long documents.
+   * Set to `false` to let the toolbar scroll with the content.
+   */
+  stickyToolbar?: boolean
+  /**
    * Enable syntax highlighting in code blocks via Shiki.
    * Requires `shiki` to be installed as a peer dependency.
    * Pass `{}` to use defaults (github-light theme, common languages).

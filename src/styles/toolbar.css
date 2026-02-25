@@ -14,6 +14,13 @@
   user-select: none;
 }
 
+/* Sticky toolbar — pinned to the viewport top while scrolling */
+.ce-editor-wrap--sticky .ce-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 /* ---- Separator between groups ---- */
 .ce-toolbar__divider {
   width: 1px;

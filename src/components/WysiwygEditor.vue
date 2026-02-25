@@ -294,6 +294,88 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Space at line start: auto-create lists and headings ----
+  // Detects markdown-style shortcuts: `* `, `- `, `1. `, `# `, `## `, `### `
+  if (e.key === ' ' && !mod && !e.shiftKey && sel && sel.rangeCount > 0 && sel.isCollapsed) {
+    // Find the block element the cursor is in
+    let block: HTMLElement | null = null
+    let node: Node | null = sel.anchorNode
+    while (node && node !== editorEl.value) {
+      if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        /^(P|DIV)$/.test((node as HTMLElement).tagName)
+      ) {
+        block = node as HTMLElement
+        break
+      }
+      node = node.parentNode
+    }
+
+    // Only act inside a top-level <p> or <div> (not inside lists, blockquotes,
+    // tables, code blocks, or headings)
+    if (
+      block &&
+      editorEl.value &&
+      block.parentElement === editorEl.value
+    ) {
+      const blockText = block.textContent || ''
+
+      // ---- Auto bullet list: `* ` or `- ` ----
+      if (blockText === '*' || blockText === '-') {
+        e.preventDefault()
+        const list = document.createElement('ul')
+        const li = document.createElement('li')
+        li.innerHTML = '<br>'
+        list.appendChild(li)
+        block.parentNode!.replaceChild(list, block)
+        // Place cursor inside the empty <li>
+        const newRange = document.createRange()
+        newRange.selectNodeContents(li)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+
+      // ---- Auto ordered list: `1.` or any `N.` ----
+      if (/^\d+\.$/.test(blockText)) {
+        e.preventDefault()
+        const list = document.createElement('ol')
+        const startNum = parseInt(blockText, 10)
+        if (startNum !== 1) list.setAttribute('start', String(startNum))
+        const li = document.createElement('li')
+        li.innerHTML = '<br>'
+        list.appendChild(li)
+        block.parentNode!.replaceChild(list, block)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(li)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+
+      // ---- Auto heading: `#`, `##`, `###` ----
+      const headingMatch = blockText.match(/^(#{1,3})$/)
+      if (headingMatch) {
+        e.preventDefault()
+        const level = headingMatch[1].length as 1 | 2 | 3
+        const heading = document.createElement(`h${level}`)
+        heading.innerHTML = '<br>'
+        block.parentNode!.replaceChild(heading, block)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(heading)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+    }
+  }
+
   // ---- Tab / Shift+Tab inside a list → indent / outdent ----
   if (e.key === 'Tab' && sel && sel.rangeCount > 0) {
     if (isInsideTag('li')) {

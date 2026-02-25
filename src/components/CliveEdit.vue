@@ -1,5 +1,5 @@
 <template>
-  <div class="cliveedit ce-editor-wrap" :class="{ 'ce-disabled': disabled }" @keydown="onRootKeydown">
+  <div class="cliveedit ce-editor-wrap" :class="{ 'ce-disabled': disabled, 'ce-editor-wrap--sticky': stickyToolbar !== false }" @keydown="onRootKeydown">
     <!-- Toolbar -->
     <EditorToolbar
       :mode="currentMode"
@@ -65,6 +65,7 @@ const props = withDefaults(defineProps<CliveEditProps>(), {
   placeholder: 'Start writing...',
   disabled: false,
   historyDepth: 100,
+  stickyToolbar: true,
 })
 
 const emit = defineEmits<CliveEditEmits>()

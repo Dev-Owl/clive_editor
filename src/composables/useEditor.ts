@@ -254,14 +254,40 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
         sel.addRange(newRange)
       } else {
         // Single line or collapsed — create a list with one item
-        const text = sel.toString() || 'List item'
-        const lines = text.split('\n').filter(l => l.trim() !== '')
-        const items = lines.length > 0
-          ? lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')
-          : '<li>List item</li>'
-        const html = `<${listTag}>${items}</${listTag}>`
-        range.deleteContents()
-        insertHtmlAtCursor(html)
+        const selectedText = sel.toString()
+        if (!selectedText) {
+          // No text selected — create list with placeholder and select it
+          // so the user can immediately start typing a replacement
+          const list = document.createElement(listTag)
+          const li = document.createElement('li')
+          li.textContent = 'List item'
+          list.appendChild(li)
+          range.deleteContents()
+          range.insertNode(list)
+          // If the list ended up inside a <p> or other inline wrapper, hoist it
+          if (list.parentElement && list.parentElement !== el && /^(P|DIV|SPAN)$/.test(list.parentElement.tagName)) {
+            list.parentElement.parentNode?.insertBefore(list, list.parentElement.nextSibling)
+            // Remove the now-empty wrapper
+            if (!list.previousElementSibling?.textContent?.trim() || list.previousSibling === list.parentElement) {
+              const prev = list.previousElementSibling
+              if (prev && !prev.textContent?.trim()) prev.remove()
+            }
+          }
+          // Select the "List item" text so the user can type to replace
+          const newRange = document.createRange()
+          newRange.selectNodeContents(li)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        } else {
+          const text = selectedText
+          const lines = text.split('\n').filter(l => l.trim() !== '')
+          const items = lines.length > 0
+            ? lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')
+            : '<li>List item</li>'
+          const html = `<${listTag}>${items}</${listTag}>`
+          range.deleteContents()
+          insertHtmlAtCursor(html)
+        }
       }
     }
     refreshActiveState()
