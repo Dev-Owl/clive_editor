@@ -508,19 +508,47 @@ function onKeydown(e: KeyboardEvent): void {
     // Only handle inline <code> (not code inside a <pre> block)
     if (codeEl && !codeEl.closest('pre') && editorEl.value?.contains(codeEl)) {
       e.preventDefault()
-      // Move cursor to just after the <code> element, then insert a new paragraph
-      const range = document.createRange()
-      range.setStartAfter(codeEl)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
-      // Insert a line break to create a new block after the code
-      const br = document.createElement('br')
-      range.insertNode(br)
-      range.setStartAfter(br)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
+
+      // Check whether the <code> sits inside a proper block element or is
+      // loose at the editor root (happens on empty documents).
+      let blockParent: HTMLElement | null = codeEl.parentElement
+      while (blockParent && blockParent !== editorEl.value) {
+        if (/^(P|DIV|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/.test(blockParent.tagName)) break
+        blockParent = blockParent.parentElement
+      }
+
+      if (!blockParent || blockParent === editorEl.value) {
+        // Root-level <code> — wrap it in a <p> and create a new <p> for the
+        // next line so the document has proper block structure.
+        const p = document.createElement('p')
+        codeEl.parentNode!.insertBefore(p, codeEl)
+        p.appendChild(codeEl)
+
+        const newP = document.createElement('p')
+        newP.innerHTML = '<br>'
+        p.parentNode!.insertBefore(newP, p.nextSibling)
+
+        const newRange = document.createRange()
+        newRange.selectNodeContents(newP)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      } else {
+        // Code is inside a proper block — move cursor out of the <code>
+        // and insert a line break so new text is unstyled.
+        const range = document.createRange()
+        range.setStartAfter(codeEl)
+        range.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(range)
+        const br = document.createElement('br')
+        range.insertNode(br)
+        range.setStartAfter(br)
+        range.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+
       onInput()
       return
     }
