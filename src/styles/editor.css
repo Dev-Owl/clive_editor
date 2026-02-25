@@ -15,6 +15,13 @@
   color: var(--ce-text);
 }
 
+/* When sticky toolbar is enabled, use overflow:clip instead of hidden.
+   clip still clips for border-radius but does NOT create a scroll container,
+   so position:sticky on the toolbar works relative to the viewport. */
+.ce-editor-wrap--sticky {
+  overflow: clip;
+}
+
 /* ---- WYSIWYG area ---- */
 .ce-wysiwyg-wrap {
   position: relative;

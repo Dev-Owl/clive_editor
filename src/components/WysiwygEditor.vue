@@ -294,6 +294,88 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Space at line start: auto-create lists and headings ----
+  // Detects markdown-style shortcuts: `* `, `- `, `1. `, `# `, `## `, `### `
+  if (e.key === ' ' && !mod && !e.shiftKey && sel && sel.rangeCount > 0 && sel.isCollapsed) {
+    // Find the block element the cursor is in
+    let block: HTMLElement | null = null
+    let node: Node | null = sel.anchorNode
+    while (node && node !== editorEl.value) {
+      if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        /^(P|DIV)$/.test((node as HTMLElement).tagName)
+      ) {
+        block = node as HTMLElement
+        break
+      }
+      node = node.parentNode
+    }
+
+    // Only act inside a top-level <p> or <div> (not inside lists, blockquotes,
+    // tables, code blocks, or headings)
+    if (
+      block &&
+      editorEl.value &&
+      block.parentElement === editorEl.value
+    ) {
+      const blockText = block.textContent || ''
+
+      // ---- Auto bullet list: `* ` or `- ` ----
+      if (blockText === '*' || blockText === '-') {
+        e.preventDefault()
+        const list = document.createElement('ul')
+        const li = document.createElement('li')
+        li.innerHTML = '<br>'
+        list.appendChild(li)
+        block.parentNode!.replaceChild(list, block)
+        // Place cursor inside the empty <li>
+        const newRange = document.createRange()
+        newRange.selectNodeContents(li)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+
+      // ---- Auto ordered list: `1.` or any `N.` ----
+      if (/^\d+\.$/.test(blockText)) {
+        e.preventDefault()
+        const list = document.createElement('ol')
+        const startNum = parseInt(blockText, 10)
+        if (startNum !== 1) list.setAttribute('start', String(startNum))
+        const li = document.createElement('li')
+        li.innerHTML = '<br>'
+        list.appendChild(li)
+        block.parentNode!.replaceChild(list, block)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(li)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+
+      // ---- Auto heading: `#`, `##`, `###` ----
+      const headingMatch = blockText.match(/^(#{1,3})$/)
+      if (headingMatch) {
+        e.preventDefault()
+        const level = headingMatch[1].length as 1 | 2 | 3
+        const heading = document.createElement(`h${level}`)
+        heading.innerHTML = '<br>'
+        block.parentNode!.replaceChild(heading, block)
+        const newRange = document.createRange()
+        newRange.selectNodeContents(heading)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+        onInput()
+        return
+      }
+    }
+  }
+
   // ---- Tab / Shift+Tab inside a list → indent / outdent ----
   if (e.key === 'Tab' && sel && sel.rangeCount > 0) {
     if (isInsideTag('li')) {
@@ -426,19 +508,47 @@ function onKeydown(e: KeyboardEvent): void {
     // Only handle inline <code> (not code inside a <pre> block)
     if (codeEl && !codeEl.closest('pre') && editorEl.value?.contains(codeEl)) {
       e.preventDefault()
-      // Move cursor to just after the <code> element, then insert a new paragraph
-      const range = document.createRange()
-      range.setStartAfter(codeEl)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
-      // Insert a line break to create a new block after the code
-      const br = document.createElement('br')
-      range.insertNode(br)
-      range.setStartAfter(br)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
+
+      // Check whether the <code> sits inside a proper block element or is
+      // loose at the editor root (happens on empty documents).
+      let blockParent: HTMLElement | null = codeEl.parentElement
+      while (blockParent && blockParent !== editorEl.value) {
+        if (/^(P|DIV|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/.test(blockParent.tagName)) break
+        blockParent = blockParent.parentElement
+      }
+
+      if (!blockParent || blockParent === editorEl.value) {
+        // Root-level <code> — wrap it in a <p> and create a new <p> for the
+        // next line so the document has proper block structure.
+        const p = document.createElement('p')
+        codeEl.parentNode!.insertBefore(p, codeEl)
+        p.appendChild(codeEl)
+
+        const newP = document.createElement('p')
+        newP.innerHTML = '<br>'
+        p.parentNode!.insertBefore(newP, p.nextSibling)
+
+        const newRange = document.createRange()
+        newRange.selectNodeContents(newP)
+        newRange.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(newRange)
+      } else {
+        // Code is inside a proper block — move cursor out of the <code>
+        // and insert a line break so new text is unstyled.
+        const range = document.createRange()
+        range.setStartAfter(codeEl)
+        range.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(range)
+        const br = document.createElement('br')
+        range.insertNode(br)
+        range.setStartAfter(br)
+        range.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+
       onInput()
       return
     }

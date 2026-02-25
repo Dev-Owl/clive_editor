@@ -20,6 +20,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
 - [v-model Bindings](#v-model-bindings)
 - [Exposed Methods](#exposed-methods)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Auto-Formatting Shortcuts](#auto-formatting-shortcuts)
 - [Toolbar](#toolbar)
   - [Default Toolbar Items](#default-toolbar-items)
   - [Custom Toolbar](#custom-toolbar)
@@ -129,6 +130,7 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 | `disabled` | `boolean` | `false` | When `true`, disables all editing and toolbar actions. |
 | `toolbarItems` | `ToolbarItem[]` | *(built-in set)* | Override the default toolbar. See [Custom Toolbar](#custom-toolbar). |
 | `historyDepth` | `number` | `100` | Maximum number of undo/redo history entries. |
+| `stickyToolbar` | `boolean` | `true` | Keep the toolbar pinned at the top of the viewport when scrolling. Set to `false` to let it scroll with the content. |
 | `highlightOptions` | `{ theme?: string; langs?: string[] }` | `undefined` | Enable syntax highlighting in code blocks via [Shiki](https://shiki.matsu.io). See [Syntax Highlighting](#syntax-highlighting). |
 
 ---
@@ -226,6 +228,23 @@ These shortcuts work in both WYSIWYG and Markdown modes:
 | `Tab` (inside table) | Move to next cell |
 | `Shift+Tab` (inside table) | Move to previous cell |
 | `Enter` (inside table) | Move to same column in next row |
+
+---
+
+## Auto-Formatting Shortcuts
+
+In **WYSIWYG mode**, CliveEdit detects common markdown patterns as you type and automatically converts them into the corresponding rich-text elements. These shortcuts trigger when you press **Space** after typing the pattern at the very beginning of an empty line (inside a `<p>` or `<div>` block).
+
+| You type | Result |
+|---|---|
+| `* ` | Creates a bullet list (`<ul>`) |
+| `- ` | Creates a bullet list (`<ul>`) |
+| `1. ` (or any `N. `) | Creates an ordered list (`<ol>`) |
+| `# ` | Converts the line to a Heading 1 (`<h1>`) |
+| `## ` | Converts the line to a Heading 2 (`<h2>`) |
+| `### ` | Converts the line to a Heading 3 (`<h3>`) |
+
+> **Note:** Auto-formatting only applies when the shortcut characters are the *sole* content of the line. If the line already contains other text, the space is inserted normally. These shortcuts do not apply inside existing lists, blockquotes, tables, code blocks, or headings.
 
 ---
 
