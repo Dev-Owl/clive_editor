@@ -311,6 +311,29 @@ function onKeydown(e: KeyboardEvent): void {
       node = node.parentNode
     }
 
+    // If no <p>/<div> wrapper found, check if we're in a bare text node
+    // directly inside the editor root (empty document, first line)
+    if (!block && editorEl.value && sel.anchorNode) {
+      const anchor = sel.anchorNode
+      if (
+        anchor.nodeType === Node.TEXT_NODE &&
+        anchor.parentNode === editorEl.value
+      ) {
+        // Wrap the text node in a <p> so the replacement logic below can work
+        const wrapper = document.createElement('p')
+        editorEl.value.insertBefore(wrapper, anchor)
+        wrapper.appendChild(anchor)
+        // Restore cursor position inside the new <p>
+        const r = sel.getRangeAt(0)
+        const offset = r.startOffset
+        r.setStart(anchor, offset)
+        r.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(r)
+        block = wrapper
+      }
+    }
+
     // Only act inside a top-level <p> or <div> (not inside lists, blockquotes,
     // tables, code blocks, or headings)
     if (

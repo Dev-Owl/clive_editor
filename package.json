@@ -1,6 +1,6 @@
 {
   "name": "@dev_owl/cliveedit",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "CliveEdit — A themeable WYSIWYG markdown editor component for Vue 3",
   "type": "module",
   "main": "./dist/cliveedit.umd.js",
