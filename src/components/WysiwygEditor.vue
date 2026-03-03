@@ -319,17 +319,21 @@ function onKeydown(e: KeyboardEvent): void {
         anchor.nodeType === Node.TEXT_NODE &&
         anchor.parentNode === editorEl.value
       ) {
+        // Save cursor offset BEFORE DOM manipulation — moving the text
+        // node into a wrapper can cause the browser to reset the Range,
+        // which would place the cursor at offset 0 (before the first char).
+        const cursorOffset = sel.getRangeAt(0).startOffset
+
         // Wrap the text node in a <p> so the replacement logic below can work
         const wrapper = document.createElement('p')
         editorEl.value.insertBefore(wrapper, anchor)
         wrapper.appendChild(anchor)
         // Restore cursor position inside the new <p>
-        const r = sel.getRangeAt(0)
-        const offset = r.startOffset
-        r.setStart(anchor, offset)
-        r.collapse(true)
+        const newRange = document.createRange()
+        newRange.setStart(anchor, cursorOffset)
+        newRange.collapse(true)
         sel.removeAllRanges()
-        sel.addRange(r)
+        sel.addRange(newRange)
         block = wrapper
       }
     }
