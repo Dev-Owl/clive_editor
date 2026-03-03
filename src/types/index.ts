@@ -81,6 +81,17 @@ export interface CliveEditProps {
    * Pass `{}` to use defaults (github-light theme, common languages).
    */
   highlightOptions?: HighlightOptions
+  /**
+   * Called when an image is pasted or dropped into the editor.
+   * Return a URL string that will be used as the image `src`.
+   * If not provided, images are embedded as base64 data URIs.
+   */
+  onImageUpload?: (file: File) => Promise<string>
+  /**
+   * Maximum image file size in bytes (default: 2 MB = 2_097_152).
+   * Images exceeding this limit are silently ignored.
+   */
+  maxImageSize?: number
 }
 
 export type CliveEditEmits = {

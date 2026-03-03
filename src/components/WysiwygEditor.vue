@@ -3,7 +3,8 @@
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
       :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput"
-      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @click="onClick" @mouseup="onSelectionChange" />
+      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
+      @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -22,12 +23,19 @@ import TableControls from './TableControls.vue'
 
 /* ---- Props / Emits ---- */
 
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const DEFAULT_MAX_IMAGE_SIZE = 2_097_152 // 2 MB
+
 const props = defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean
   /** Optional highlight function for syntax highlighting code blocks */
   highlight?: (code: string, lang: string) => string
+  /** Called when an image is pasted or dropped. Return a URL string. */
+  onImageUpload?: (file: File) => Promise<string>
+  /** Max image file size in bytes (default: 2 MB) */
+  maxImageSize?: number
 }>()
 
 const emit = defineEmits<{
@@ -319,17 +327,21 @@ function onKeydown(e: KeyboardEvent): void {
         anchor.nodeType === Node.TEXT_NODE &&
         anchor.parentNode === editorEl.value
       ) {
+        // Save cursor offset BEFORE DOM manipulation — moving the text
+        // node into a wrapper can cause the browser to reset the Range,
+        // which would place the cursor at offset 0 (before the first char).
+        const cursorOffset = sel.getRangeAt(0).startOffset
+
         // Wrap the text node in a <p> so the replacement logic below can work
         const wrapper = document.createElement('p')
         editorEl.value.insertBefore(wrapper, anchor)
         wrapper.appendChild(anchor)
         // Restore cursor position inside the new <p>
-        const r = sel.getRangeAt(0)
-        const offset = r.startOffset
-        r.setStart(anchor, offset)
-        r.collapse(true)
+        const newRange = document.createRange()
+        newRange.setStart(anchor, cursorOffset)
+        newRange.collapse(true)
         sel.removeAllRanges()
-        sel.addRange(r)
+        sel.addRange(newRange)
         block = wrapper
       }
     }
@@ -800,10 +812,97 @@ function restoreCursorInCode(
   }
 }
 
+/* ---- Image insert helper ---- */
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function insertImageFile(file: File): Promise<void> {
+  const maxSize = props.maxImageSize ?? DEFAULT_MAX_IMAGE_SIZE
+  if (file.size > maxSize) return
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) return
+
+  let src: string
+  if (props.onImageUpload) {
+    try {
+      src = await props.onImageUpload(file)
+    } catch {
+      return // upload failed — do nothing
+    }
+  } else {
+    src = await fileToBase64(file)
+  }
+
+  const img = document.createElement('img')
+  img.src = src
+  img.alt = file.name || 'pasted image'
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0 || !editorEl.value) return
+  const range = sel.getRangeAt(0)
+  range.deleteContents()
+  range.insertNode(img)
+
+  // Move cursor after the image
+  const newRange = document.createRange()
+  newRange.setStartAfter(img)
+  newRange.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+
+  onInput()
+}
+
+/* ---- Drop handler ---- */
+
+function onDrop(e: DragEvent): void {
+  if (props.disabled) return
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const imageFile = Array.from(files).find((f) => ACCEPTED_IMAGE_TYPES.includes(f.type))
+  if (!imageFile) return
+
+  e.preventDefault()
+
+  // Place cursor at the drop point
+  const sel = window.getSelection()
+  if (sel && e.clientX !== undefined) {
+    // caretRangeFromPoint to place cursor at the drop coordinates
+    let range: Range | null = null
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(e.clientX, e.clientY)
+    }
+    if (range) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+
+  insertImageFile(imageFile)
+}
+
 /* ---- Paste handler ---- */
 
 function onPaste(e: ClipboardEvent): void {
   e.preventDefault()
+
+  // ---- Image file in clipboard (screenshot paste, etc.) ----
+  const files = e.clipboardData?.files
+  if (files && files.length > 0) {
+    const imageFile = Array.from(files).find((f) => ACCEPTED_IMAGE_TYPES.includes(f.type))
+    if (imageFile) {
+      insertImageFile(imageFile)
+      return
+    }
+  }
+
   const html = e.clipboardData?.getData('text/html')
   const text = e.clipboardData?.getData('text/plain') ?? ''
 
@@ -823,6 +922,72 @@ function onPaste(e: ClipboardEvent): void {
 
   const temp = document.createElement('div')
   temp.innerHTML = cleanHtml
+
+  // ---- Flatten pasted list items when pasting inside an existing list ----
+  // When the clipboard contains <ul>/<ol> with <li> items and we're pasting
+  // into an existing list, we unwrap the list containers AND convert each
+  // <li> into its inner content so they merge cleanly into the existing
+  // list structure without creating nested lists (e.g. `- - item`).
+  const anchorNode = sel.anchorNode
+  const targetLi = anchorNode instanceof HTMLElement
+    ? anchorNode.closest('li')
+    : anchorNode?.parentElement?.closest('li')
+
+  if (targetLi) {
+    const parentList = targetLi.parentElement // the <ul> or <ol>
+
+    // Collect <li> elements from pasted lists and insert them as siblings
+    // after the current <li> in the parent list.
+    const pastedLists = Array.from(temp.querySelectorAll(':scope > ul, :scope > ol'))
+    if (pastedLists.length > 0) {
+      // Gather all <li> items to insert as siblings
+      const newItems: HTMLLIElement[] = []
+      for (const list of pastedLists) {
+        for (const li of Array.from(list.querySelectorAll('li'))) {
+          newItems.push(li as HTMLLIElement)
+        }
+        // Remove the list wrapper from the temp — its items will be inserted
+        // directly into the parent list
+        list.remove()
+      }
+
+      // Any remaining non-list content in temp goes into the current <li>
+      // (e.g. plain text that was before/after the pasted list)
+      const frag = document.createDocumentFragment()
+      let lastInline: Node | null = null
+      while (temp.firstChild) {
+        lastInline = frag.appendChild(temp.firstChild)
+      }
+      if (frag.childNodes.length > 0) {
+        range.insertNode(frag)
+      }
+
+      // Insert extracted <li> elements after the current <li> in the parent list
+      if (parentList) {
+        let insertAfter: Node = targetLi
+        for (const li of newItems) {
+          if (insertAfter.nextSibling) {
+            parentList.insertBefore(li, insertAfter.nextSibling)
+          } else {
+            parentList.appendChild(li)
+          }
+          insertAfter = li
+        }
+
+        // Place cursor at the end of the last inserted <li>
+        const lastLi = newItems[newItems.length - 1] ?? targetLi
+        const cursorRange = document.createRange()
+        cursorRange.selectNodeContents(lastLi)
+        cursorRange.collapse(false) // collapse to end
+        sel.removeAllRanges()
+        sel.addRange(cursorRange)
+      }
+
+      onInput()
+      return
+    }
+  }
+
   const frag = document.createDocumentFragment()
   let lastNode: Node | null = null
   while (temp.firstChild) {
