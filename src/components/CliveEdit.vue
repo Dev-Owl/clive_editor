@@ -1,38 +1,20 @@
 <template>
-  <div class="cliveedit ce-editor-wrap" :class="{ 'ce-disabled': disabled, 'ce-editor-wrap--sticky': stickyToolbar !== false }" @keydown="onRootKeydown">
+  <div class="cliveedit ce-editor-wrap"
+    :class="{ 'ce-disabled': disabled, 'ce-editor-wrap--sticky': stickyToolbar !== false }" @keydown="onRootKeydown">
     <!-- Toolbar -->
-    <EditorToolbar
-      :mode="currentMode"
-      :disabled="disabled"
-      :custom-items="toolbarItems"
-      :ctx="editorContext"
-      @action="handleToolbarAction"
-      @toggle-mode="toggleMode"
-    />
+    <EditorToolbar :mode="currentMode" :disabled="disabled" :custom-items="toolbarItems" :ctx="editorContext"
+      @action="handleToolbarAction" @toggle-mode="toggleMode" />
 
     <!-- WYSIWYG Editor -->
-    <WysiwygEditor
-      v-show="currentMode === 'wysiwyg'"
-      ref="wysiwygRef"
-      :model-value="modelValue"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :highlight="highlightFn ?? undefined"
-      @update:model-value="onContentUpdate"
-      @input="onWysiwygInput"
-      @selection-change="onSelectionChange"
-      @action="handleToolbarAction"
-    />
+    <WysiwygEditor v-show="currentMode === 'wysiwyg'" ref="wysiwygRef" :model-value="modelValue"
+      :placeholder="placeholder" :disabled="disabled" :highlight="highlightFn ?? undefined"
+      :on-image-upload="onImageUpload" :max-image-size="maxImageSize" @update:model-value="onContentUpdate"
+      @input="onWysiwygInput" @selection-change="onSelectionChange" @action="handleToolbarAction" />
 
     <!-- Markdown Editor -->
-    <MarkdownEditor
-      v-show="currentMode === 'markdown'"
-      ref="markdownRef"
-      :model-value="modelValue"
-      :placeholder="placeholder || 'Write markdown here...'"
-      :disabled="disabled"
-      @update:model-value="onContentUpdate"
-    />
+    <MarkdownEditor v-show="currentMode === 'markdown'" ref="markdownRef" :model-value="modelValue"
+      :placeholder="placeholder || 'Write markdown here...'" :disabled="disabled"
+      @update:model-value="onContentUpdate" />
   </div>
 </template>
 
@@ -293,7 +275,7 @@ function doRedo(): void {
 function onRootKeydown(e: KeyboardEvent): void {
   if (props.disabled) return
   const mod = e.ctrlKey || e.metaKey
- console.log('keydown', { key: e.key, mod, shift: e.shiftKey });
+  console.log('keydown', { key: e.key, mod, shift: e.shiftKey });
   if (mod && e.key === 'b') {
     e.preventDefault()
     handleToolbarAction('bold')

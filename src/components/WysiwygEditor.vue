@@ -3,7 +3,8 @@
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
       :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput"
-      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @click="onClick" @mouseup="onSelectionChange" />
+      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
+      @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -22,12 +23,19 @@ import TableControls from './TableControls.vue'
 
 /* ---- Props / Emits ---- */
 
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const DEFAULT_MAX_IMAGE_SIZE = 2_097_152 // 2 MB
+
 const props = defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean
   /** Optional highlight function for syntax highlighting code blocks */
   highlight?: (code: string, lang: string) => string
+  /** Called when an image is pasted or dropped. Return a URL string. */
+  onImageUpload?: (file: File) => Promise<string>
+  /** Max image file size in bytes (default: 2 MB) */
+  maxImageSize?: number
 }>()
 
 const emit = defineEmits<{
@@ -804,10 +812,97 @@ function restoreCursorInCode(
   }
 }
 
+/* ---- Image insert helper ---- */
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function insertImageFile(file: File): Promise<void> {
+  const maxSize = props.maxImageSize ?? DEFAULT_MAX_IMAGE_SIZE
+  if (file.size > maxSize) return
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) return
+
+  let src: string
+  if (props.onImageUpload) {
+    try {
+      src = await props.onImageUpload(file)
+    } catch {
+      return // upload failed — do nothing
+    }
+  } else {
+    src = await fileToBase64(file)
+  }
+
+  const img = document.createElement('img')
+  img.src = src
+  img.alt = file.name || 'pasted image'
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0 || !editorEl.value) return
+  const range = sel.getRangeAt(0)
+  range.deleteContents()
+  range.insertNode(img)
+
+  // Move cursor after the image
+  const newRange = document.createRange()
+  newRange.setStartAfter(img)
+  newRange.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+
+  onInput()
+}
+
+/* ---- Drop handler ---- */
+
+function onDrop(e: DragEvent): void {
+  if (props.disabled) return
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const imageFile = Array.from(files).find((f) => ACCEPTED_IMAGE_TYPES.includes(f.type))
+  if (!imageFile) return
+
+  e.preventDefault()
+
+  // Place cursor at the drop point
+  const sel = window.getSelection()
+  if (sel && e.clientX !== undefined) {
+    // caretRangeFromPoint to place cursor at the drop coordinates
+    let range: Range | null = null
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(e.clientX, e.clientY)
+    }
+    if (range) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+
+  insertImageFile(imageFile)
+}
+
 /* ---- Paste handler ---- */
 
 function onPaste(e: ClipboardEvent): void {
   e.preventDefault()
+
+  // ---- Image file in clipboard (screenshot paste, etc.) ----
+  const files = e.clipboardData?.files
+  if (files && files.length > 0) {
+    const imageFile = Array.from(files).find((f) => ACCEPTED_IMAGE_TYPES.includes(f.type))
+    if (imageFile) {
+      insertImageFile(imageFile)
+      return
+    }
+  }
+
   const html = e.clipboardData?.getData('text/html')
   const text = e.clipboardData?.getData('text/plain') ?? ''
 

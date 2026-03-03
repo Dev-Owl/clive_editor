@@ -30,6 +30,10 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
   - [Basic Usage](#basic-usage)
   - [How It Works](#how-it-works)
   - [Theming the Language Label](#theming-the-language-label)
+- [Image Paste & Drop](#image-paste-drop)
+  - [Default Behaviour (Base64)](#default-behaviour-base64)
+  - [Custom Upload Handler](#custom-upload-handler)
+  - [Size Limit](#size-limit)
 - [Tables](#tables)
   - [Inserting a Table](#inserting-a-table)
   - [Table Controls](#table-controls)
@@ -132,6 +136,8 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 | `historyDepth` | `number` | `100` | Maximum number of undo/redo history entries. |
 | `stickyToolbar` | `boolean` | `true` | Keep the toolbar pinned at the top of the viewport when scrolling. Set to `false` to let it scroll with the content. |
 | `highlightOptions` | `{ theme?: string; langs?: string[] }` | `undefined` | Enable syntax highlighting in code blocks via [Shiki](https://shiki.matsu.io). See [Syntax Highlighting](#syntax-highlighting). |
+| `onImageUpload` | `(file: File) => Promise<string>` | `undefined` | Called when an image is pasted or dropped. Return a URL. If not provided, images are embedded as base64. See [Image Paste & Drop](#image-paste--drop). |
+| `maxImageSize` | `number` | `2097152` (2 MB) | Maximum image file size in bytes. Images exceeding this are ignored. |
 
 ---
 
@@ -402,6 +408,74 @@ The language label badge can be customised with CSS variables:
 | `--ce-code-lang-bg` | `rgba(0, 0, 0, 0.06)` | Label background |
 | `--ce-code-lang-text` | `#6b7280` | Label text colour |
 | `--ce-code-lang-font-size` | `0.75em` | Label font size |
+
+---
+
+## Image Paste & Drop
+
+CliveEdit supports pasting and dragging images directly into the editor. Screenshots from the clipboard, files from your desktop, or images copied from other apps can be inserted seamlessly.
+
+**Accepted formats:** PNG, JPEG, GIF, WebP
+
+### Default Behaviour (Base64)
+
+With no extra configuration, pasted or dropped images are embedded as base64 data URIs:
+
+```vue
+<!-- Images just work — no config needed -->
+<CliveEdit v-model="content" />
+```
+
+The resulting markdown:
+
+```markdown
+![pasted image](data:image/png;base64,iVBORw0KGgo...)
+```
+
+> **Note:** Base64 encoding increases file size by ~33%. For large images, consider using a custom upload handler instead.
+
+### Custom Upload Handler
+
+Provide an `onImageUpload` callback to upload images to your own server or cloud storage. The function receives a `File` object and should return a `Promise<string>` with the final URL:
+
+```vue
+<template>
+  <CliveEdit v-model="content" :on-image-upload="uploadImage" />
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { CliveEdit } from '@dev_owl/cliveedit'
+
+const content = ref('')
+
+async function uploadImage(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('image', file)
+
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  const { url } = await res.json()
+  return url  // e.g. 'https://cdn.example.com/images/photo.png'
+}
+</script>
+```
+
+If the upload function throws an error, the image is silently discarded.
+
+### Size Limit
+
+By default, images larger than **2 MB** are rejected. Customise this with the `maxImageSize` prop (value in bytes):
+
+```vue
+<!-- Allow images up to 5 MB -->
+<CliveEdit
+  v-model="content"
+  :max-image-size="5 * 1024 * 1024"
+/>
+```
 
 ---
 
