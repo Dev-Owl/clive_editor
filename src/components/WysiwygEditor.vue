@@ -827,6 +827,72 @@ function onPaste(e: ClipboardEvent): void {
 
   const temp = document.createElement('div')
   temp.innerHTML = cleanHtml
+
+  // ---- Flatten pasted list items when pasting inside an existing list ----
+  // When the clipboard contains <ul>/<ol> with <li> items and we're pasting
+  // into an existing list, we unwrap the list containers AND convert each
+  // <li> into its inner content so they merge cleanly into the existing
+  // list structure without creating nested lists (e.g. `- - item`).
+  const anchorNode = sel.anchorNode
+  const targetLi = anchorNode instanceof HTMLElement
+    ? anchorNode.closest('li')
+    : anchorNode?.parentElement?.closest('li')
+
+  if (targetLi) {
+    const parentList = targetLi.parentElement // the <ul> or <ol>
+
+    // Collect <li> elements from pasted lists and insert them as siblings
+    // after the current <li> in the parent list.
+    const pastedLists = Array.from(temp.querySelectorAll(':scope > ul, :scope > ol'))
+    if (pastedLists.length > 0) {
+      // Gather all <li> items to insert as siblings
+      const newItems: HTMLLIElement[] = []
+      for (const list of pastedLists) {
+        for (const li of Array.from(list.querySelectorAll('li'))) {
+          newItems.push(li as HTMLLIElement)
+        }
+        // Remove the list wrapper from the temp — its items will be inserted
+        // directly into the parent list
+        list.remove()
+      }
+
+      // Any remaining non-list content in temp goes into the current <li>
+      // (e.g. plain text that was before/after the pasted list)
+      const frag = document.createDocumentFragment()
+      let lastInline: Node | null = null
+      while (temp.firstChild) {
+        lastInline = frag.appendChild(temp.firstChild)
+      }
+      if (frag.childNodes.length > 0) {
+        range.insertNode(frag)
+      }
+
+      // Insert extracted <li> elements after the current <li> in the parent list
+      if (parentList) {
+        let insertAfter: Node = targetLi
+        for (const li of newItems) {
+          if (insertAfter.nextSibling) {
+            parentList.insertBefore(li, insertAfter.nextSibling)
+          } else {
+            parentList.appendChild(li)
+          }
+          insertAfter = li
+        }
+
+        // Place cursor at the end of the last inserted <li>
+        const lastLi = newItems[newItems.length - 1] ?? targetLi
+        const cursorRange = document.createRange()
+        cursorRange.selectNodeContents(lastLi)
+        cursorRange.collapse(false) // collapse to end
+        sel.removeAllRanges()
+        sel.addRange(cursorRange)
+      }
+
+      onInput()
+      return
+    }
+  }
+
   const frag = document.createDocumentFragment()
   let lastNode: Node | null = null
   while (temp.firstChild) {
