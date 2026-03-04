@@ -420,6 +420,76 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- Enter on empty <li> inside a list → outdent or exit the list ----
+  if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const liEl = anchor instanceof HTMLElement
+      ? anchor.closest('li')
+      : anchor?.parentElement?.closest('li')
+
+    if (liEl && editorEl.value?.contains(liEl)) {
+      // An <li> is "empty" when it has no text and no nested sub-list
+      const liText = liEl.textContent?.trim()
+      const hasChildList = !!liEl.querySelector('ul, ol')
+      const isEmpty = !liText && !hasChildList
+
+      if (isEmpty) {
+        e.preventDefault()
+
+        const parentList = liEl.parentElement // <ul> or <ol>
+        if (!parentList || (parentList.tagName !== 'UL' && parentList.tagName !== 'OL')) {
+          onInput()
+          return
+        }
+
+        const grandparentLi = parentList.parentElement
+        const isNested = grandparentLi?.tagName === 'LI'
+
+        // Remove the empty <li>
+        liEl.remove()
+
+        // If parent list is now empty, remove it
+        if (parentList.children.length === 0) {
+          parentList.remove()
+        }
+
+        if (isNested && grandparentLi) {
+          // Nested list → insert a new <li> after the grandparent <li> in the outer list
+          const outerList = grandparentLi.parentElement
+          if (outerList && (outerList.tagName === 'UL' || outerList.tagName === 'OL')) {
+            const newLi = document.createElement('li')
+            newLi.innerHTML = '<br>'
+            outerList.insertBefore(newLi, grandparentLi.nextSibling)
+            const newRange = document.createRange()
+            newRange.selectNodeContents(newLi)
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+          }
+        } else {
+          // Root-level list → exit the list, insert a <p> after it
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          parentList.parentNode?.insertBefore(p, parentList.nextSibling)
+
+          // If list is now empty, remove it entirely
+          if (parentList.children.length === 0) {
+            parentList.remove()
+          }
+
+          const newRange = document.createRange()
+          newRange.selectNodeContents(p)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        }
+
+        onInput()
+        return
+      }
+    }
+  }
+
   // ---- Enter on empty line inside a blockquote → exit the blockquote ----
   if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
     const anchor = sel.anchorNode
