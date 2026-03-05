@@ -3,6 +3,7 @@
     :class="{ 'ce-disabled': disabled, 'ce-editor-wrap--sticky': stickyToolbar !== false }" @keydown="onRootKeydown">
     <!-- Toolbar -->
     <EditorToolbar :mode="currentMode" :disabled="disabled" :custom-items="toolbarItems" :ctx="editorContext"
+      :enable-emoji="emojiPickerComposable.isReady.value && emojiPickerComposable.enabled.value"
       @action="handleToolbarAction" @toggle-mode="toggleMode" />
 
     <!-- WYSIWYG Editor -->
@@ -15,6 +16,17 @@
     <MarkdownEditor v-show="currentMode === 'markdown'" ref="markdownRef" :model-value="modelValue"
       :placeholder="placeholder || 'Write markdown here...'" :disabled="disabled"
       @update:model-value="onContentUpdate" />
+
+    <!-- Emoji Picker (floating panel — teleported to body to escape overflow clipping) -->
+    <Teleport to="body">
+      <EmojiPicker
+        :visible="emojiPickerVisible"
+        :anchor-el="emojiAnchorEl"
+        :options="emojiPickerOptions"
+        @select="onEmojiSelect"
+        @close="emojiPickerVisible = false"
+      />
+    </Teleport>
   </div>
 </template>
 
@@ -23,15 +35,20 @@ import { ref, computed, provide, reactive, watch, onMounted, nextTick } from 'vu
 import WysiwygEditor from './WysiwygEditor.vue'
 import MarkdownEditor from './MarkdownEditor.vue'
 import EditorToolbar from './EditorToolbar.vue'
+import EmojiPicker from './EmojiPicker.vue'
 import { useHistory } from '@/composables/useHistory'
 import { useEditor } from '@/composables/useEditor'
 import { useHighlighter } from '@/composables/useHighlighter'
+import { useEmojiPicker } from '@/composables/useEmojiPicker'
+import { saveSelection, restoreSelection } from '@/utils/selection'
+import type { SavedSelection } from '@/utils/selection'
 import type {
   CliveEditProps,
   CliveEditEmits,
   EditorMode,
   EditorContext,
   ToolbarItem,
+  EmojiPickerOptions,
 } from '@/types'
 import { EDITOR_CTX_KEY } from '@/types'
 
@@ -79,6 +96,21 @@ const {
 // Provide the highlight function to child components (e.g. MarkdownViewer)
 provideHighlight()
 
+const emojiPickerComposable = useEmojiPicker()
+
+/* ---- Emoji picker state ---- */
+
+const emojiPickerVisible = ref(false)
+const emojiAnchorEl = ref<HTMLElement | null>(null)
+let emojiSavedSelection: SavedSelection | null = null
+
+const emojiPickerOptions = computed<EmojiPickerOptions | undefined>(() => {
+  const opt = props.emojiPicker
+  if (!opt) return undefined
+  if (opt === true) return {}
+  return opt
+})
+
 /* ---- Watch mode prop (two-way) ---- */
 
 watch(() => props.mode, (m) => {
@@ -100,6 +132,12 @@ onMounted(() => {
         nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
       }
     })
+  }
+
+  // Initialise emoji picker if emojiPicker prop is provided
+  if (props.emojiPicker) {
+    const opts = props.emojiPicker === true ? {} : props.emojiPicker
+    emojiPickerComposable.init(opts)
   }
 })
 
@@ -126,6 +164,26 @@ watch(
       // highlightOptions removed → disable highlighting
       setHighlightEnabled(false)
       nextTick(() => wysiwygRef.value?.refreshFromMarkdown())
+    }
+  },
+  { deep: true },
+)
+
+/* ---- Watch emojiPicker prop ---- */
+
+watch(
+  () => props.emojiPicker,
+  (opt) => {
+    if (opt) {
+      const opts = opt === true ? {} : opt
+      if (!emojiPickerComposable.isReady.value) {
+        emojiPickerComposable.init(opts)
+      } else {
+        emojiPickerComposable.setEnabled(true)
+      }
+    } else {
+      emojiPickerComposable.setEnabled(false)
+      emojiPickerVisible.value = false
     }
   },
   { deep: true },
@@ -178,6 +236,12 @@ function toggleMode(): void {
 
 function handleToolbarAction(actionName: string): void {
   if (props.disabled) return
+
+  // Emoji action is handled separately (toggle picker)
+  if (actionName === 'emoji') {
+    toggleEmojiPicker()
+    return
+  }
 
   // History: push immediate before destructive actions
   if (actionName !== 'undo' && actionName !== 'redo') {
@@ -250,6 +314,50 @@ function handleMarkdownAction(action: string): void {
   }
 }
 
+/* ---- Emoji picker ---- */
+
+function toggleEmojiPicker(): void {
+  if (emojiPickerVisible.value) {
+    emojiPickerVisible.value = false
+    return
+  }
+  // Save the current selection so we can restore it before inserting
+  if (currentMode.value === 'wysiwyg') {
+    emojiSavedSelection = saveSelection()
+  }
+  // Find the emoji toolbar button to anchor the picker
+  const toolbar = document.querySelector('.cliveedit .ce-toolbar')
+  const btn = toolbar?.querySelector<HTMLElement>('[aria-label="Emoji"]')
+  emojiAnchorEl.value = btn ?? null
+  emojiPickerVisible.value = true
+}
+
+function onEmojiSelect(unicode: string): void {
+  emojiPickerVisible.value = false
+  history.pushImmediate(props.modelValue)
+
+  if (currentMode.value === 'wysiwyg') {
+    // Restore saved cursor position and insert the emoji character
+    if (emojiSavedSelection) {
+      restoreSelection(emojiSavedSelection)
+      emojiSavedSelection = null
+    }
+    // Insert as a plain text character (like typing it)
+    document.execCommand('insertText', false, unicode)
+    // Sync to markdown
+    nextTick(() => {
+      const md = wysiwygRef.value?.syncToMarkdown()
+      if (md !== undefined) {
+        emit('update:modelValue', md)
+        history.pushImmediate(md)
+      }
+    })
+  } else {
+    // Markdown mode — insert at textarea cursor
+    markdownRef.value?.insertBlock(unicode)
+  }
+}
+
 /* ---- Undo / Redo ---- */
 
 function doUndo(): void {
@@ -314,6 +422,7 @@ const editorContext = reactive<EditorContext>({
   image: () => handleToolbarAction('image'),
   horizontalRule: () => handleToolbarAction('horizontalRule'),
   table: () => handleToolbarAction('table'),
+  emoji: () => handleToolbarAction('emoji'),
   undo: doUndo,
   redo: doRedo,
   canUndo: history.canUndo.value,

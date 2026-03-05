@@ -23,11 +23,12 @@ export default defineConfig({
       fileName: (format) => `cliveedit.${format}.js`,
     },
     rollupOptions: {
-      external: ['vue', 'shiki'],
+      external: ['vue', 'shiki', 'emoji-picker-element'],
       output: {
         globals: {
           vue: 'Vue',
           shiki: 'shiki',
+          'emoji-picker-element': 'EmojiPickerElement',
         },
       },
     },

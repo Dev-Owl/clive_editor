@@ -14,6 +14,7 @@ export { useHistory } from './composables/useHistory'
 export { useEditor } from './composables/useEditor'
 export { useHighlighter, useInjectHighlight } from './composables/useHighlighter'
 export type { HighlightFn } from './composables/useHighlighter'
+export { useEmojiPicker } from './composables/useEmojiPicker'
 
 // Types
 export type {
@@ -24,6 +25,7 @@ export type {
   CliveEditEmits,
   EditorContext,
   HighlightOptions,
+  EmojiPickerOptions,
 } from './types'
 export { EDITOR_CTX_KEY } from './types'
 

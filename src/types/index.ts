@@ -56,6 +56,13 @@ export interface HighlightOptions {
   darkMode?: boolean
 }
 
+export interface EmojiPickerOptions {
+  /** Emoji data locale (default: 'en') */
+  locale?: string
+  /** URL to fetch emoji data from (default: jsdelivr CDN) */
+  dataSource?: string
+}
+
 export interface CliveEditProps {
   /** Raw markdown string (v-model) */
   modelValue: string
@@ -81,6 +88,12 @@ export interface CliveEditProps {
    * Pass `{}` to use defaults (github-light theme, common languages).
    */
   highlightOptions?: HighlightOptions
+  /**
+   * Enable the emoji picker toolbar button.
+   * Requires `emoji-picker-element` to be installed as a peer dependency.
+   * Pass `true` for defaults or an options object.
+   */
+  emojiPicker?: boolean | EmojiPickerOptions
   /**
    * Called when an image is pasted or dropped into the editor.
    * Return a URL string that will be used as the image `src`.
@@ -126,6 +139,7 @@ export interface EditorContext {
   image: (src?: string, alt?: string) => void
   horizontalRule: () => void
   table: () => void
+  emoji: () => void
 
   /* --- history ---- */
   undo: () => void
