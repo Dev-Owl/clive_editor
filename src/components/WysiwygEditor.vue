@@ -320,25 +320,42 @@ function onKeydown(e: KeyboardEvent): void {
     }
 
     // If no <p>/<div> wrapper found, check if we're in a bare text node
-    // directly inside the editor root (empty document, first line)
+    // directly inside the editor root (empty document, first line), OR
+    // inside an inline element (e.g. <span>) at the editor root.
     if (!block && editorEl.value && sel.anchorNode) {
       const anchor = sel.anchorNode
+
+      // Find the top-level node under the editor root that contains the anchor
+      let directChild: Node | null = anchor
+      let hitBlock = false
+      while (directChild && directChild.parentNode !== editorEl.value) {
+        if (
+          directChild.nodeType === Node.ELEMENT_NODE &&
+          /^(P|DIV|H[1-6]|UL|OL|BLOCKQUOTE|PRE|TABLE)$/.test((directChild as HTMLElement).tagName)
+        ) {
+          hitBlock = true
+          break
+        }
+        directChild = directChild.parentNode
+      }
+
       if (
-        anchor.nodeType === Node.TEXT_NODE &&
-        anchor.parentNode === editorEl.value
+        !hitBlock &&
+        directChild &&
+        directChild.parentNode === editorEl.value
       ) {
         // Save cursor offset BEFORE DOM manipulation — moving the text
         // node into a wrapper can cause the browser to reset the Range,
         // which would place the cursor at offset 0 (before the first char).
         const cursorOffset = sel.getRangeAt(0).startOffset
 
-        // Wrap the text node in a <p> so the replacement logic below can work
+        // Wrap the node in a <p> so the replacement logic below can work
         const wrapper = document.createElement('p')
-        editorEl.value.insertBefore(wrapper, anchor)
-        wrapper.appendChild(anchor)
+        editorEl.value.insertBefore(wrapper, directChild)
+        wrapper.appendChild(directChild)
         // Restore cursor position inside the new <p>
         const newRange = document.createRange()
-        newRange.setStart(anchor, cursorOffset)
+        newRange.setStart(anchor, Math.min(cursorOffset, anchor.nodeType === Node.TEXT_NODE ? (anchor as Text).length : 0))
         newRange.collapse(true)
         sel.removeAllRanges()
         sel.addRange(newRange)
@@ -346,14 +363,18 @@ function onKeydown(e: KeyboardEvent): void {
       }
     }
 
-    // Only act inside a top-level <p> or <div> (not inside lists, blockquotes,
-    // tables, code blocks, or headings)
+    // Only act inside a <p> or <div> that is NOT inside a list, blockquote,
+    // table, code block, or heading.  We walk from the block's parent up to
+    // the editor root to check for forbidden containers — this is more
+    // forgiving than requiring `block.parentElement === editorEl.value`,
+    // which breaks when paste or Enter leaves blocks nested inside a <p>.
     if (
       block &&
       editorEl.value &&
-      block.parentElement === editorEl.value
+      editorEl.value.contains(block) &&
+      !isInsideSpecialContainer(block)
     ) {
-      const blockText = block.textContent || ''
+      const blockText = (block.textContent || '').replace(/[\u200B\uFEFF]/g, '')
 
       // ---- Auto bullet list: `* ` or `- ` ----
       if (blockText === '*' || blockText === '-') {
@@ -417,6 +438,76 @@ function onKeydown(e: KeyboardEvent): void {
       e.preventDefault()
       emit('action', e.shiftKey ? 'outdentList' : 'indentList')
       return
+    }
+  }
+
+  // ---- Enter on empty <li> inside a list → outdent or exit the list ----
+  if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const liEl = anchor instanceof HTMLElement
+      ? anchor.closest('li')
+      : anchor?.parentElement?.closest('li')
+
+    if (liEl && editorEl.value?.contains(liEl)) {
+      // An <li> is "empty" when it has no text and no nested sub-list
+      const liText = liEl.textContent?.trim()
+      const hasChildList = !!liEl.querySelector('ul, ol')
+      const isEmpty = !liText && !hasChildList
+
+      if (isEmpty) {
+        e.preventDefault()
+
+        const parentList = liEl.parentElement // <ul> or <ol>
+        if (!parentList || (parentList.tagName !== 'UL' && parentList.tagName !== 'OL')) {
+          onInput()
+          return
+        }
+
+        const grandparentLi = parentList.parentElement
+        const isNested = grandparentLi?.tagName === 'LI'
+
+        // Remove the empty <li>
+        liEl.remove()
+
+        // If parent list is now empty, remove it
+        if (parentList.children.length === 0) {
+          parentList.remove()
+        }
+
+        if (isNested && grandparentLi) {
+          // Nested list → insert a new <li> after the grandparent <li> in the outer list
+          const outerList = grandparentLi.parentElement
+          if (outerList && (outerList.tagName === 'UL' || outerList.tagName === 'OL')) {
+            const newLi = document.createElement('li')
+            newLi.innerHTML = '<br>'
+            outerList.insertBefore(newLi, grandparentLi.nextSibling)
+            const newRange = document.createRange()
+            newRange.selectNodeContents(newLi)
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+          }
+        } else {
+          // Root-level list → exit the list, insert a <p> after it
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          parentList.parentNode?.insertBefore(p, parentList.nextSibling)
+
+          // If list is now empty, remove it entirely
+          if (parentList.children.length === 0) {
+            parentList.remove()
+          }
+
+          const newRange = document.createRange()
+          newRange.selectNodeContents(p)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        }
+
+        onInput()
+        return
+      }
     }
   }
 
@@ -505,28 +596,55 @@ function onKeydown(e: KeyboardEvent): void {
         sel.removeAllRanges()
         sel.addRange(newRange)
       } else {
-        // Has content → split at cursor, keep before in heading, after in <p>
         const range = sel.getRangeAt(0)
-        const afterRange = document.createRange()
-        afterRange.setStart(range.endContainer, range.endOffset)
-        afterRange.setEnd(headingEl, headingEl.childNodes.length)
-        const afterContent = afterRange.extractContents()
 
-        const p = document.createElement('p')
-        if (afterContent.textContent?.trim()) {
-          p.appendChild(afterContent)
-        } else {
+        // Check if cursor is at the very beginning of the heading
+        const beforeRange = document.createRange()
+        beforeRange.setStart(headingEl, 0)
+        beforeRange.setEnd(range.startContainer, range.startOffset)
+        const textBeforeCursor = beforeRange.toString()
+
+        // Find the correct insertion point at the editor root level.
+        // If the heading is nested (e.g. inside a <p> from a paste),
+        // walk up to the top-level ancestor so the new element is
+        // inserted as a direct child of the editor.
+        const insertionAnchor = findEditorRootAncestor(headingEl)
+
+        if (!textBeforeCursor) {
+          // Cursor at beginning → insert empty paragraph BEFORE the heading.
+          // This pushes the heading to the next line, keeping it intact.
+          const p = document.createElement('p')
           p.innerHTML = '<br>'
+          insertionAnchor.parentNode?.insertBefore(p, insertionAnchor)
+          // Cursor stays at the beginning of the heading (now on the next line)
+        } else {
+          // Has content after cursor → split at cursor
+          const afterRange = document.createRange()
+          afterRange.setStart(range.endContainer, range.endOffset)
+          afterRange.setEnd(headingEl, headingEl.childNodes.length)
+          const afterContent = afterRange.extractContents()
+
+          const p = document.createElement('p')
+          if (afterContent.textContent?.trim()) {
+            p.appendChild(afterContent)
+          } else {
+            p.innerHTML = '<br>'
+          }
+
+          insertionAnchor.parentNode?.insertBefore(p, insertionAnchor.nextSibling)
+
+          // If heading ended up empty after the split, add <br> to keep it visible
+          if (!headingEl.textContent?.trim()) {
+            headingEl.innerHTML = '<br>'
+          }
+
+          // Place cursor at start of new paragraph
+          const newRange = document.createRange()
+          newRange.selectNodeContents(p)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
         }
-
-        headingEl.parentNode?.insertBefore(p, headingEl.nextSibling)
-
-        // Place cursor at start of new paragraph
-        const newRange = document.createRange()
-        newRange.selectNodeContents(p)
-        newRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(newRange)
       }
 
       onInput()
@@ -1004,11 +1122,101 @@ function onPaste(e: ClipboardEvent): void {
     sel.addRange(newRange)
   }
 
+  // Lift any block-level elements that ended up nested inside <p> tags
+  // (e.g. pasting a heading while the cursor was inside a paragraph).
+  normalizeNestedBlocks()
+
   // Trigger sync
   onInput()
 }
 
 function onSelectionChange(): void {
   emit('selectionChange')
+}
+
+/* ---- DOM normalisation helpers ---- */
+
+/** Block-level tags that must NOT be nested inside a <p>. */
+const BLOCK_TAGS = /^(H[1-6]|UL|OL|BLOCKQUOTE|PRE|TABLE|HR|DIV)$/
+
+/**
+ * Check whether `block` sits inside a list, blockquote, table,
+ * code block, or heading (between `block` and the editor root).
+ * Used to prevent auto-generation inside those containers.
+ */
+function isInsideSpecialContainer(block: HTMLElement): boolean {
+  let el: HTMLElement | null = block.parentElement
+  while (el && el !== editorEl.value) {
+    if (/^(UL|OL|BLOCKQUOTE|PRE|TABLE|THEAD|TBODY|TR|TH|TD|H[1-6])$/.test(el.tagName)) {
+      return true
+    }
+    el = el.parentElement
+  }
+  return false
+}
+
+/**
+ * Walk from `node` up to the direct child of the editor root.
+ * Returns that top-level ancestor, which is where new sibling
+ * elements should be inserted.
+ */
+function findEditorRootAncestor(node: Node): Node {
+  let anc: Node = node
+  while (anc.parentNode && anc.parentNode !== editorEl.value) {
+    anc = anc.parentNode
+  }
+  return anc
+}
+
+/**
+ * Lift block-level elements that ended up nested inside <p> tags.
+ *
+ * After paste (or other DOM mutations) the editor can contain
+ * structures like `<p><h2>…</h2></p>`.  This function splits
+ * such `<p>` elements so every block-level child becomes a
+ * direct child of the editor root.
+ */
+function normalizeNestedBlocks(): void {
+  if (!editorEl.value) return
+
+  for (const p of Array.from(editorEl.value.querySelectorAll('p'))) {
+    // Skip if the <p> is not a direct child of the editor
+    if (p.parentElement !== editorEl.value) continue
+
+    const hasNestedBlock = Array.from(p.childNodes).some(
+      (n) => n.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.test((n as HTMLElement).tagName),
+    )
+    if (!hasNestedBlock) continue
+
+    // Split: walk through child nodes and lift block elements
+    const parent = p.parentNode!
+    let currentP: HTMLParagraphElement | null = null
+
+    for (const child of Array.from(p.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.test((child as HTMLElement).tagName)) {
+        // Flush any accumulated inline content
+        if (currentP && (currentP.textContent?.trim() || currentP.querySelector('img, br'))) {
+          parent.insertBefore(currentP, p)
+        }
+        currentP = null
+        // Lift the block element out
+        parent.insertBefore(child, p)
+      } else {
+        // Inline content → accumulate into a <p>
+        if (!currentP) {
+          currentP = document.createElement('p')
+        }
+        currentP.appendChild(child)
+      }
+    }
+
+    // Flush trailing inline content
+    if (currentP && (currentP.textContent?.trim() || currentP.querySelector('img, br'))) {
+      parent.insertBefore(currentP, p)
+    }
+
+    // Remove the now-empty original <p>
+    p.remove()
+  }
 }
 </script>

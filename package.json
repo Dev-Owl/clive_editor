@@ -1,6 +1,6 @@
 {
   "name": "@dev_owl/cliveedit",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "CliveEdit — A themeable WYSIWYG markdown editor component for Vue 3",
   "type": "module",
   "main": "./dist/cliveedit.umd.js",
@@ -31,10 +31,14 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
+    "emoji-picker-element": ">=1.0.0",
     "shiki": ">=1.0.0",
     "vue": ">=3.3.0"
   },
   "peerDependenciesMeta": {
+    "emoji-picker-element": {
+      "optional": true
+    },
     "shiki": {
       "optional": true
     }
@@ -44,6 +48,7 @@
     "@types/node": "^25.3.0",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-vue": "^6.0.4",
+    "emoji-picker-element": "^1.29.1",
     "lucide-vue-next": "^0.574.0",
     "markdown-it": "^14.1.1",
     "shiki": "^3.22.0",

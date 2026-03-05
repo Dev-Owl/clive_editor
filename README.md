@@ -30,6 +30,11 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
   - [Basic Usage](#basic-usage)
   - [How It Works](#how-it-works)
   - [Theming the Language Label](#theming-the-language-label)
+- [Emoji Picker](#emoji-picker)
+  - [Installation](#installation-2)
+  - [Basic Usage](#basic-usage-1)
+  - [Options](#options)
+  - [How It Works](#how-it-works-1)
 - [Image Paste & Drop](#image-paste-drop)
   - [Default Behaviour (Base64)](#default-behaviour-base64)
   - [Custom Upload Handler](#custom-upload-handler)
@@ -48,6 +53,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
   - [useHistory Composable](#usehistory-composable)
   - [useEditor Composable](#useeditor-composable)
   - [useHighlighter Composable](#usehighlighter-composable)
+  - [useEmojiPicker Composable](#useemojipicker-composable)
 - [TypeScript](#typescript)
 - [Build Scripts](#build-scripts)
 - [Browser Support](#browser-support)
@@ -136,6 +142,7 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 | `historyDepth` | `number` | `100` | Maximum number of undo/redo history entries. |
 | `stickyToolbar` | `boolean` | `true` | Keep the toolbar pinned at the top of the viewport when scrolling. Set to `false` to let it scroll with the content. |
 | `highlightOptions` | `{ theme?: string; langs?: string[] }` | `undefined` | Enable syntax highlighting in code blocks via [Shiki](https://shiki.matsu.io). See [Syntax Highlighting](#syntax-highlighting). |
+| `emojiPicker` | `boolean \| EmojiPickerOptions` | `undefined` | Enable the emoji picker toolbar button via [emoji-picker-element](https://github.com/nolanlawson/emoji-picker-element). Pass `true` for defaults or an options object. See [Emoji Picker](#emoji-picker). |
 | `onImageUpload` | `(file: File) => Promise<string>` | `undefined` | Called when an image is pasted or dropped. Return a URL. If not provided, images are embedded as base64. See [Image Paste & Drop](#image-paste--drop). |
 | `maxImageSize` | `number` | `2097152` (2 MB) | Maximum image file size in bytes. Images exceeding this are ignored. |
 
@@ -282,6 +289,7 @@ The built-in toolbar includes 19 buttons plus a mode toggle:
 | **Link** | `Link` | Insert `<a>` / `[](url)` | Cursor inside link |
 | **Image** | `Image` | Insert `<img>` / `![alt]()` | — |
 | **Horizontal Rule** | `Minus` | Insert `<hr>` / `---` | — |
+| **Emoji** | `Smile` | Open emoji picker | — |
 | **Table** | `Table` | Insert a 3×3 table | Cursor inside a table |
 | — | *separator* | | |
 | **Undo** | `Undo2` | Undo last change | — |
@@ -348,7 +356,7 @@ interface ToolbarItem {
 }
 ```
 
-**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `table`, `undo`, `redo`.
+**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `emoji`, `table`, `undo`, `redo`.
 
 ---
 
@@ -408,6 +416,67 @@ The language label badge can be customised with CSS variables:
 | `--ce-code-lang-bg` | `rgba(0, 0, 0, 0.06)` | Label background |
 | `--ce-code-lang-text` | `#6b7280` | Label text colour |
 | `--ce-code-lang-font-size` | `0.75em` | Label font size |
+
+---
+
+## Emoji Picker
+
+CliveEdit supports an emoji picker for inserting native Unicode emoji via [emoji-picker-element](https://github.com/nolanlawson/emoji-picker-element) — a lightweight web component (~12.5 kB min+gz) with built-in search, categories, skin tones, favourites, and accessibility.
+
+### Installation
+
+emoji-picker-element is an **optional** peer dependency. Install it alongside CliveEdit:
+
+```bash
+npm install emoji-picker-element
+```
+
+Without emoji-picker-element installed, the emoji button simply does not appear in the toolbar — no errors.
+
+### Basic Usage
+
+```vue
+<!-- Defaults -->
+<CliveEdit v-model="content" :emoji-picker="true" />
+
+<!-- With options -->
+<CliveEdit
+  v-model="content"
+  :emoji-picker="{ locale: 'en' }"
+/>
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `locale` | `string` | `'en'` | Emoji data locale. |
+| `dataSource` | `string` | jsdelivr CDN | URL to fetch emoji data from. Useful for self-hosting. |
+
+Pass `true` instead of an object to use all defaults.
+
+### How It Works
+
+- Click the **😊** (Smile) button in the toolbar to open a floating emoji picker panel.
+- **Search** for emoji by typing in the search box.
+- Browse by **category** (Smileys, Animals, Food, etc.).
+- Pick a **skin tone** via the built-in skin tone selector.
+- **Recently used** emoji appear in the Favourites row.
+- Select an emoji to insert the native Unicode character at the current cursor position. This works in both WYSIWYG and Markdown modes.
+- The picker closes on selection, pressing **Escape**, or clicking outside.
+
+Emoji are native Unicode characters — they render using each platform's built-in emoji font (Apple on macOS/iOS, Segoe UI Emoji on Windows, Noto Color Emoji on Linux/Android). This is the expected cross-platform behaviour.
+
+### Dark Mode
+
+The emoji picker **automatically detects** whether the editor is in dark mode by reading the computed `--ce-bg` CSS variable on the `.cliveedit` wrapper and calculating its luminance. There is no manual `darkMode` option — just apply your dark theme via CSS custom properties as usual and the picker follows:
+
+```vue
+<div :class="{ 'dark-theme': isDark }">
+  <!-- The emoji picker automatically adapts its dark/light appearance -->
+  <CliveEdit v-model="content" :emoji-picker="true" />
+</div>
+```
 
 ---
 
@@ -730,6 +799,7 @@ interface EditorContext {
   image(src?: string, alt?: string): void
   horizontalRule(): void
   table(): void
+  emoji(): void
 
   // History
   undo(): void
@@ -842,6 +912,34 @@ const highlightFn = useInjectHighlight()
 // highlightFn.value is null until a parent calls provideHighlight()
 ```
 
+### useEmojiPicker Composable
+
+The emoji picker system is available as a standalone composable for advanced or custom integrations:
+
+```ts
+import { useEmojiPicker } from '@dev_owl/cliveedit'
+
+const { init, isReady, enabled, setEnabled } = useEmojiPicker()
+
+// Initialise (async — attempts to load emoji-picker-element)
+await init()
+
+// Check readiness
+isReady.value  // true after successful init
+
+// Control the feature
+setEnabled(false)   // hide the emoji button
+```
+
+> **Note:** Dark mode is detected automatically from the editor's background — there is no manual `setDarkMode()` call.
+
+| Method / Property | Description |
+|---|---|
+| `init(options?)` | Load emoji-picker-element and enable the feature. Returns `Promise<boolean>`. |
+| `isReady` | `Ref<boolean>` — `true` when the module is loaded. |
+| `enabled` | `Ref<boolean>` — `true` when the feature is active. |
+| `setEnabled(value)` | Enable / disable without re-loading. |
+
 ---
 
 ## TypeScript
@@ -857,6 +955,7 @@ import type {
   CliveEditEmits,
   EditorContext,
   HighlightOptions,
+  EmojiPickerOptions,
   MarkdownViewerProps,
 } from '@dev_owl/cliveedit'
 ```

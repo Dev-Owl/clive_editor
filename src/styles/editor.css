@@ -332,6 +332,37 @@
   margin: 0 4px;
 }
 
+/* ---- Emoji Picker (floating panel, teleported to <body>) ---- */
+.ce-emoji-picker {
+  position: fixed;
+  z-index: 99999;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.ce-emoji-picker__mount {
+  line-height: 0;
+}
+
+.ce-emoji-picker emoji-picker {
+  width: 350px;
+  height: 320px;
+
+  /* Bridge editor CSS variables to emoji-picker-element */
+  --background: var(--ce-bg, #fff);
+  --border-color: var(--ce-border, #e0e0e0);
+  --button-active-background: var(--ce-toolbar-btn-active, #e6e6e6);
+  --button-hover-background: var(--ce-toolbar-btn-hover, #d9d9d9);
+  --input-border-color: var(--ce-border, #999);
+  --outline-color: var(--ce-focus-ring, #999);
+  --category-font-color: var(--ce-text, #111);
+  --input-font-color: var(--ce-text, #111);
+  --indicator-color: var(--ce-link-color, #385ac1);
+  --border-size: 0;
+  --border-radius: 0;
+}
+
 /* ================================================================== */
 /*  MarkdownViewer — Read-only renderer                                */
 /* ================================================================== */

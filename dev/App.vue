@@ -13,6 +13,10 @@
             <span>Syntax highlighting</span>
           </label>
           <label class="toggle">
+            <input type="checkbox" v-model="emojiPicker" />
+            <span>Emoji picker</span>
+          </label>
+          <label class="toggle">
             <input type="checkbox" v-model="darkMode" />
             <span>Dark theme</span>
           </label>
@@ -38,6 +42,7 @@
     <div :class="{ 'dark-theme': darkMode }">
       <CliveEdit v-model="markdown" v-model:mode="mode" :toolbar-items="activeToolbarItems"
         :highlight-options="syntaxHighlight ? highlightConfig : undefined"
+        :emoji-picker="emojiPicker || undefined"
         placeholder="Start writing something amazing..." />
     </div>
 
@@ -87,6 +92,7 @@ import {
   Table,
   Undo2,
   Redo2,
+  Smile,
 } from 'lucide-vue-next'
 import readmeContent from '../README.md?raw'
 
@@ -94,6 +100,7 @@ import readmeContent from '../README.md?raw'
 
 const darkMode = ref(false)
 const syntaxHighlight = ref(true)
+const emojiPicker = ref(true)
 const mode = ref<EditorMode>('wysiwyg')
 const markdown = ref(readmeContent)
 
@@ -232,6 +239,12 @@ const allToolbarFeatures: FeatureDef[] = [
     id: 'hr', label: 'Horizontal Rule',
     toolbarItem: {
       id: 'hr', label: 'Horizontal Rule', icon: Minus, action: 'horizontalRule',
+    },
+  },
+  {
+    id: 'emoji', label: 'Emoji',
+    toolbarItem: {
+      id: 'emoji', label: 'Emoji', icon: Smile, action: 'emoji',
     },
   },
   {

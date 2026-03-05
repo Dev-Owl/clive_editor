@@ -56,6 +56,7 @@ import {
   Image,
   Minus,
   Table,
+  Smile,
   Undo2,
   Redo2,
   FileCode,
@@ -70,6 +71,7 @@ const props = defineProps<{
   disabled?: boolean
   customItems?: ToolbarItem[]
   ctx: EditorContext
+  enableEmoji?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -155,6 +157,9 @@ const defaultItems: ToolbarItem[] = [
     id: 'hr', label: 'Horizontal Rule', icon: Minus, action: 'horizontalRule',
   },
   {
+    id: 'emoji', label: 'Emoji', icon: Smile, action: 'emoji',
+  },
+  {
     id: 'table', label: 'Table', icon: Table, action: 'table',
     active: (ctx) => ctx.isActive('table'),
   },
@@ -170,7 +175,12 @@ const defaultItems: ToolbarItem[] = [
   },
 ]
 
-const items = computed(() => props.customItems ?? defaultItems)
+const items = computed(() => {
+  const base = props.customItems ?? defaultItems
+  if (props.enableEmoji) return base
+  // Filter out emoji item when the feature is not enabled
+  return base.filter((item) => item.id !== 'emoji')
+})
 
 /* ---- Action dispatch ---- */
 

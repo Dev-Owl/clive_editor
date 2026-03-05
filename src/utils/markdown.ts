@@ -152,6 +152,40 @@ const td = new TurndownService({
   linkStyle: 'inlined',
 })
 
+/* ---------- URL-safe escaping ---------- */
+
+/*
+ * Override Turndown's escape so that markdown special characters inside
+ * URL-like patterns (https://… / http://…) are NOT escaped.
+ * Without this, underscores in URLs get turned into `\_` which breaks
+ * auto-linkification on re-parse.
+ */
+const originalEscape = td.escape.bind(td)
+td.escape = function (str: string): string {
+  const urlPattern = /(https?:\/\/[^\s<>[\]]*)/g
+  const parts = str.split(urlPattern)
+  return parts
+    .map((part, i) => (i % 2 === 1 ? part : originalEscape(part)))
+    .join('')
+}
+
+/*
+ * When a link's visible text is identical to its href (auto-linked URL),
+ * emit the raw URL instead of `[url\_escaped](url)`.  This keeps the
+ * markdown clean and avoids underscore-escaping in the link text.
+ */
+td.addRule('autoLink', {
+  filter(node) {
+    if (node.nodeName !== 'A') return false
+    const href = (node as HTMLElement).getAttribute('href')
+    const text = node.textContent?.trim()
+    return !!href && href === text
+  },
+  replacement(_content, node) {
+    return (node as HTMLElement).getAttribute('href') || ''
+  },
+})
+
 // Strikethrough rule
 td.addRule('strikethrough', {
   filter: ['del', 's'],
