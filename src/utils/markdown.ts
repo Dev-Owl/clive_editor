@@ -136,7 +136,78 @@ function escapeAttrStr(str: string): string {
  */
 export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions): string {
   const md = getMdInstance(options?.highlight)
-  return md.render(markdown)
+  return md.render(sanitizeMarkdownTables(markdown))
+}
+
+/**
+ * Sanitize malformed markdown tables:
+ * - Normalize column counts across all rows
+ * - Add missing separator row after the header
+ */
+function sanitizeMarkdownTables(markdown: string): string {
+  const lines = markdown.split('\n')
+  const result: string[] = []
+  let tableBuffer: string[] = []
+
+  const isTableRow = (line: string) => {
+    const trimmed = line.trim()
+    return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 1
+  }
+
+  const isSeparator = (line: string) =>
+    /^\|(\s*:?-+:?\s*\|)+\s*$/.test(line.trim())
+
+  const flushTable = () => {
+    if (tableBuffer.length === 0) return
+
+    // A single pipe-row is not a table
+    if (tableBuffer.length < 2) {
+      result.push(...tableBuffer)
+      tableBuffer = []
+      return
+    }
+
+    // Count max columns across non-separator rows
+    const dataLines = tableBuffer.filter((l) => !isSeparator(l))
+    const colCounts = dataLines.map((l) => {
+      const parts = l.trim().split('|')
+      return parts.slice(1, parts.length - 1).length
+    })
+    const maxCols = Math.max(...colCounts, 1)
+
+    const hasSep = tableBuffer.some(isSeparator)
+
+    // Pad all rows and regenerate separators with correct column count
+    const padded = tableBuffer.map((l) => {
+      if (isSeparator(l)) {
+        return '|' + ' --- |'.repeat(maxCols)
+      }
+      const parts = l.trim().split('|')
+      const cells = parts.slice(1, parts.length - 1)
+      while (cells.length < maxCols) cells.push('  ')
+      return '|' + cells.join('|') + '|'
+    })
+
+    // Insert separator after first row if missing
+    if (!hasSep) {
+      padded.splice(1, 0, '|' + ' --- |'.repeat(maxCols))
+    }
+
+    result.push(...padded)
+    tableBuffer = []
+  }
+
+  for (const line of lines) {
+    if (isTableRow(line)) {
+      tableBuffer.push(line)
+    } else {
+      flushTable()
+      result.push(line)
+    }
+  }
+  flushTable()
+
+  return result.join('\n')
 }
 
 /* ---------- turndown (HTML → MD) ---------- */
@@ -267,8 +338,17 @@ td.addRule('tableRow', {
       (c) => c.tagName === 'TH' || c.tagName === 'TD',
     ) as HTMLElement[]
 
-    const row = cells.map((c) => ` ${cellContent(c)} `).join('|')
-    return `|${row}|\n`
+    // Expand cells with colspan into multiple columns
+    const expandedCells: string[] = []
+    for (const c of cells) {
+      const colspan = parseInt(c.getAttribute('colspan') || '1', 10) || 1
+      expandedCells.push(` ${cellContent(c)} `)
+      for (let i = 1; i < colspan; i++) {
+        expandedCells.push('  ')
+      }
+    }
+
+    return `|${expandedCells.join('|')}|\n`
   },
 })
 
@@ -281,8 +361,13 @@ td.addRule('tableHead', {
 
     const cells = Array.from(firstRow.children).filter(
       (c) => c.tagName === 'TH' || c.tagName === 'TD',
-    )
-    const separator = cells.map(() => ' --- ').join('|')
+    ) as HTMLElement[]
+    // Account for colspan when counting separator columns
+    let totalCols = 0
+    for (const c of cells) {
+      totalCols += parseInt(c.getAttribute('colspan') || '1', 10) || 1
+    }
+    const separator = Array.from({ length: totalCols }, () => ' --- ').join('|')
     return `${content}|${separator}|\n`
   },
 })
@@ -297,8 +382,37 @@ td.addRule('tableBody', {
 td.addRule('table', {
   filter: 'table',
   replacement(content) {
-    // Ensure blank lines around the table for valid markdown
-    return `\n\n${content}\n`
+    const lines = content.split('\n').filter((l) => l.trim().length > 0)
+    if (lines.length === 0) return ''
+
+    const isSep = (l: string) => /^\|(\s*:?-+:?\s*\|)+\s*$/.test(l.trim())
+    const hasSeparator = lines.some(isSep)
+
+    // Count max columns across non-separator rows
+    const dataLines = lines.filter((l) => !isSep(l))
+    const colCounts = dataLines.map((l) => {
+      const parts = l.trim().split('|')
+      return parts.slice(1, parts.length - 1).length
+    })
+    const maxCols = Math.max(...colCounts, 1)
+
+    // Pad rows to maxCols and regenerate separators
+    const padded = lines.map((l) => {
+      if (isSep(l)) {
+        return '|' + ' --- |'.repeat(maxCols)
+      }
+      const parts = l.trim().split('|')
+      const cells = parts.slice(1, parts.length - 1)
+      while (cells.length < maxCols) cells.push('  ')
+      return '|' + cells.join('|') + '|'
+    })
+
+    // Add separator after first row if missing
+    if (!hasSeparator && padded.length >= 1) {
+      padded.splice(1, 0, '|' + ' --- |'.repeat(maxCols))
+    }
+
+    return '\n\n' + padded.join('\n') + '\n\n'
   },
 })
 

@@ -10,6 +10,7 @@ const REMOVE_WITH_CONTENT = new Set([
   'SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'APPLET',
   'FORM', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON',
   'LINK', 'META', 'NOSCRIPT',
+  'COLGROUP', 'COL',
 ])
 
 /** Attributes that are allowed to stay. Everything else is stripped. */
