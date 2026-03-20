@@ -76,6 +76,7 @@ const emit = defineEmits<CliveEditEmits>()
 const currentMode = ref<EditorMode>(props.mode)
 const wysiwygRef = ref<InstanceType<typeof WysiwygEditor> | null>(null)
 const markdownRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+let pendingImmediateMarkdownHistory = false
 
 // Synthetic ref that points to the WYSIWYG contenteditable element
 const wysiwygElRef = computed(() => wysiwygRef.value?.el ?? null)
@@ -195,7 +196,12 @@ watch(
 
 function onContentUpdate(md: string): void {
   emit('update:modelValue', md)
-  history.pushState(md)
+  if (pendingImmediateMarkdownHistory) {
+    pendingImmediateMarkdownHistory = false
+    history.pushImmediate(md)
+  } else {
+    history.pushState(md)
+  }
 }
 
 function onWysiwygInput(): void {
@@ -279,6 +285,7 @@ function handleToolbarAction(actionName: ToolbarAction): void {
   } else {
     const md = markdownRef.value
     if (md) {
+      pendingImmediateMarkdownHistory = true
       runMarkdownCommand(md, actionName)
     }
   }
@@ -324,6 +331,7 @@ function onEmojiSelect(unicode: string): void {
     })
   } else {
     // Markdown mode — insert at textarea cursor
+    pendingImmediateMarkdownHistory = true
     markdownRef.value?.insertBlock(unicode)
   }
 }
@@ -337,6 +345,7 @@ function insertTextAtCursor(text: string): void {
     document.execCommand('insertText', false, text)
     syncWysiwygToMarkdown()
   } else {
+    pendingImmediateMarkdownHistory = true
     markdownRef.value?.insertBlock(text)
   }
 }
