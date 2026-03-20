@@ -47,8 +47,8 @@ import type {
   CliveEditEmits,
   EditorMode,
   EditorContext,
-  ToolbarItem,
   ToolbarAction,
+  ToolbarItem,
   EmojiPickerOptions,
 } from '@/types'
 import { EDITOR_CTX_KEY } from '@/types'
@@ -235,6 +235,72 @@ function toggleMode(): void {
 
 /* ---- Toolbar action dispatch ---- */
 
+type DispatchableToolbarAction = Exclude<ToolbarAction, 'emoji'>
+
+const headingActionMap = {
+  1: 'heading1',
+  2: 'heading2',
+  3: 'heading3',
+} as const
+
+const wysiwygActionHandlers: Record<DispatchableToolbarAction, () => void> = {
+  bold: () => editor.bold(),
+  italic: () => editor.italic(),
+  strikethrough: () => editor.strikethrough(),
+  heading1: () => editor.heading(1),
+  heading2: () => editor.heading(2),
+  heading3: () => editor.heading(3),
+  bulletList: () => editor.bulletList(),
+  orderedList: () => editor.orderedList(),
+  indentList: () => editor.indentList(),
+  outdentList: () => editor.outdentList(),
+  blockquote: () => editor.blockquote(),
+  codeInline: () => editor.codeInline(),
+  codeBlock: () => editor.codeBlock(),
+  link: () => editor.link(),
+  image: () => editor.image(),
+  horizontalRule: () => editor.horizontalRule(),
+  table: () => editor.table(),
+  undo: () => doUndo(),
+  redo: () => doRedo(),
+}
+
+const markdownActionHandlers: Record<DispatchableToolbarAction, () => void> = {
+  bold: () => markdownRef.value?.insertSyntax('**', '**'),
+  italic: () => markdownRef.value?.insertSyntax('*', '*'),
+  strikethrough: () => markdownRef.value?.insertSyntax('~~', '~~'),
+  heading1: () => markdownRef.value?.insertSyntax('# ', ''),
+  heading2: () => markdownRef.value?.insertSyntax('## ', ''),
+  heading3: () => markdownRef.value?.insertSyntax('### ', ''),
+  bulletList: () => markdownRef.value?.insertSyntax('- ', ''),
+  orderedList: () => markdownRef.value?.insertSyntax('1. ', ''),
+  indentList: () => markdownRef.value?.indentList(),
+  outdentList: () => markdownRef.value?.outdentList(),
+  blockquote: () => markdownRef.value?.insertSyntax('> ', ''),
+  codeInline: () => markdownRef.value?.insertSyntax('`', '`'),
+  codeBlock: () => markdownRef.value?.insertBlock('\n```language\n\n```\n'),
+  link: () => markdownRef.value?.insertSyntax('[', '](url)'),
+  image: () => markdownRef.value?.insertSyntax('![alt](', ')'),
+  horizontalRule: () => markdownRef.value?.insertBlock('\n---\n'),
+  table: () => markdownRef.value?.insertBlock('\n| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| Cell | Cell | Cell |\n| Cell | Cell | Cell |\n'),
+  undo: () => doUndo(),
+  redo: () => doRedo(),
+}
+
+function createContextAction(action: ToolbarAction): () => void {
+  return () => handleToolbarAction(action)
+}
+
+function syncWysiwygToMarkdown(): void {
+  nextTick(() => {
+    const md = wysiwygRef.value?.syncToMarkdown()
+    if (md !== undefined) {
+      emit('update:modelValue', md)
+      history.pushImmediate(md)
+    }
+  })
+}
+
 function handleToolbarAction(actionName: ToolbarAction): void {
   if (props.disabled) return
 
@@ -250,71 +316,20 @@ function handleToolbarAction(actionName: ToolbarAction): void {
   }
 
   if (currentMode.value === 'wysiwyg') {
-    handleWysiwygAction(actionName)
-  } else {
-    handleMarkdownAction(actionName)
-  }
-}
-
-function handleWysiwygAction(action: ToolbarAction): void {
-  switch (action) {
-    case 'bold': editor.bold(); break
-    case 'italic': editor.italic(); break
-    case 'strikethrough': editor.strikethrough(); break
-    case 'heading1': editor.heading(1); break
-    case 'heading2': editor.heading(2); break
-    case 'heading3': editor.heading(3); break
-    case 'bulletList': editor.bulletList(); break
-    case 'orderedList': editor.orderedList(); break
-    case 'indentList': editor.indentList(); break
-    case 'outdentList': editor.outdentList(); break
-    case 'blockquote': editor.blockquote(); break
-    case 'codeInline': editor.codeInline(); break
-    case 'codeBlock': editor.codeBlock(); break
-    case 'link': editor.link(); break
-    case 'image': editor.image(); break
-    case 'horizontalRule': editor.horizontalRule(); break
-    case 'table': editor.table(); break
-    case 'undo': doUndo(); return
-    case 'redo': doRedo(); return
-    default: return
-  }
-
-  // After action, sync to markdown
-  nextTick(() => {
-    const md = wysiwygRef.value?.syncToMarkdown()
-    if (md !== undefined) {
-      emit('update:modelValue', md)
-      history.pushImmediate(md)
+    handleModeAction(actionName, wysiwygActionHandlers)
+    if (actionName !== 'undo' && actionName !== 'redo') {
+      syncWysiwygToMarkdown()
     }
-  })
+  } else {
+    handleModeAction(actionName, markdownActionHandlers)
+  }
 }
 
-function handleMarkdownAction(action: ToolbarAction): void {
-  const md = markdownRef.value
-  if (!md) return
-
-  switch (action) {
-    case 'bold': md.insertSyntax('**', '**'); break
-    case 'italic': md.insertSyntax('*', '*'); break
-    case 'strikethrough': md.insertSyntax('~~', '~~'); break
-    case 'heading1': md.insertSyntax('# ', ''); break
-    case 'heading2': md.insertSyntax('## ', ''); break
-    case 'heading3': md.insertSyntax('### ', ''); break
-    case 'bulletList': md.insertSyntax('- ', ''); break
-    case 'orderedList': md.insertSyntax('1. ', ''); break
-    case 'indentList': md.indentList(); break
-    case 'outdentList': md.outdentList(); break
-    case 'blockquote': md.insertSyntax('> ', ''); break
-    case 'codeInline': md.insertSyntax('`', '`'); break
-    case 'codeBlock': md.insertBlock('\n```language\n\n```\n'); break
-    case 'link': md.insertSyntax('[', '](url)'); break
-    case 'image': md.insertSyntax('![alt](', ')'); break
-    case 'horizontalRule': md.insertBlock('\n---\n'); break
-    case 'table': md.insertBlock('\n| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| Cell | Cell | Cell |\n| Cell | Cell | Cell |\n'); break
-    case 'undo': doUndo(); break
-    case 'redo': doRedo(); break
-  }
+function handleModeAction(
+  action: DispatchableToolbarAction,
+  handlers: Record<DispatchableToolbarAction, () => void>,
+): void {
+  handlers[action]()
 }
 
 /* ---- Emoji picker ---- */
@@ -409,22 +424,22 @@ function onRootKeydown(e: KeyboardEvent): void {
 const editorContext = reactive<EditorContext>({
   mode: currentMode.value,
   disabled: props.disabled,
-  bold: () => handleToolbarAction('bold'),
-  italic: () => handleToolbarAction('italic'),
-  strikethrough: () => handleToolbarAction('strikethrough'),
-  heading: (level: 1 | 2 | 3) => handleToolbarAction(`heading${level}`),
-  bulletList: () => handleToolbarAction('bulletList'),
-  orderedList: () => handleToolbarAction('orderedList'),
-  indentList: () => handleToolbarAction('indentList'),
-  outdentList: () => handleToolbarAction('outdentList'),
-  blockquote: () => handleToolbarAction('blockquote'),
-  codeInline: () => handleToolbarAction('codeInline'),
-  codeBlock: () => handleToolbarAction('codeBlock'),
-  link: () => handleToolbarAction('link'),
-  image: () => handleToolbarAction('image'),
-  horizontalRule: () => handleToolbarAction('horizontalRule'),
-  table: () => handleToolbarAction('table'),
-  emoji: () => handleToolbarAction('emoji'),
+  bold: createContextAction('bold'),
+  italic: createContextAction('italic'),
+  strikethrough: createContextAction('strikethrough'),
+  heading: (level: 1 | 2 | 3) => handleToolbarAction(headingActionMap[level]),
+  bulletList: createContextAction('bulletList'),
+  orderedList: createContextAction('orderedList'),
+  indentList: createContextAction('indentList'),
+  outdentList: createContextAction('outdentList'),
+  blockquote: createContextAction('blockquote'),
+  codeInline: createContextAction('codeInline'),
+  codeBlock: createContextAction('codeBlock'),
+  link: createContextAction('link'),
+  image: createContextAction('image'),
+  horizontalRule: createContextAction('horizontalRule'),
+  table: createContextAction('table'),
+  emoji: createContextAction('emoji'),
   undo: doUndo,
   redo: doRedo,
   canUndo: history.canUndo.value,
