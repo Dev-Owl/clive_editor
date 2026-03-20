@@ -386,7 +386,6 @@ function doRedo(): void {
 function onRootKeydown(e: KeyboardEvent): void {
   if (props.disabled) return
   const mod = e.ctrlKey || e.metaKey
-  console.log('keydown', { key: e.key, mod, shift: e.shiftKey });
   if (mod && e.key === 'b') {
     e.preventDefault()
     handleToolbarAction('bold')
