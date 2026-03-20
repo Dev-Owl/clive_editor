@@ -1,37 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WysiwygEditor from '@/components/WysiwygEditor.vue'
-
-function setCollapsedSelection(node: Node, offset = 0) {
-  const selection = window.getSelection()
-  const range = document.createRange()
-  range.setStart(node, offset)
-  range.collapse(true)
-  selection?.removeAllRanges()
-  selection?.addRange(range)
-}
-
-function triggerPaste(
-  wrapper: ReturnType<typeof mount>,
-  {
-    html = '',
-    text = '',
-  }: {
-    html?: string
-    text?: string
-  },
-) {
-  return wrapper.get('.ce-wysiwyg').trigger('paste', {
-    clipboardData: {
-      files: [],
-      getData: (type: string) => {
-        if (type === 'text/html') return html
-        if (type === 'text/plain') return text
-        return ''
-      },
-    },
-  })
-}
+import { setCollapsedSelection, triggerPaste } from './helpers/wysiwyg'
 
 describe('WysiwygEditor keyboard flows', () => {
   beforeEach(() => {
@@ -132,49 +102,6 @@ describe('WysiwygEditor keyboard flows', () => {
     vi.runAllTimers()
 
     expect(editor.element.innerHTML).toBe('<ul><li>One</li></ul><p><br></p>')
-    wrapper.unmount()
-  })
-
-  it('exits an empty blockquote line into a new paragraph', async () => {
-    const wrapper = mount(WysiwygEditor, {
-      attachTo: document.body,
-      props: {
-        modelValue: '',
-      },
-    })
-
-    const editor = wrapper.get('.ce-wysiwyg')
-    editor.element.innerHTML = '<blockquote><p>Quote</p><p><br></p></blockquote>'
-    const emptyLine = editor.element.querySelectorAll('blockquote p')[1]
-    setCollapsedSelection(emptyLine, 0)
-
-    await editor.trigger('keydown', { key: 'Enter' })
-    vi.runAllTimers()
-
-    expect(editor.element.innerHTML).toBe('<blockquote><p>Quote</p></blockquote><p><br></p>')
-    wrapper.unmount()
-  })
-
-  it('splits a heading into a following paragraph on Enter', async () => {
-    const wrapper = mount(WysiwygEditor, {
-      attachTo: document.body,
-      props: {
-        modelValue: '',
-      },
-    })
-
-    const editor = wrapper.get('.ce-wysiwyg')
-    editor.element.innerHTML = '<h2>Hello world</h2>'
-    const text = editor.element.querySelector('h2')!.firstChild!
-    setCollapsedSelection(text, 5)
-
-    await editor.trigger('keydown', { key: 'Enter' })
-    vi.runAllTimers()
-
-    const heading = editor.element.querySelector('h2')
-    const paragraph = editor.element.querySelector('p')
-    expect(heading?.textContent).toBe('Hello')
-    expect(paragraph?.textContent?.trim()).toBe('world')
     wrapper.unmount()
   })
 

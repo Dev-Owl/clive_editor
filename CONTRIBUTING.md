@@ -24,6 +24,7 @@ Useful commands:
 npm run dev
 npm run typecheck
 npm run test
+npm run test:e2e
 npm run test:watch
 npm run build
 ```
@@ -45,6 +46,7 @@ Before opening a change, make sure these pass:
 ```bash
 npm run typecheck
 npm run test
+npm run test:e2e
 npm run build
 ```
 
