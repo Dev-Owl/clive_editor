@@ -70,6 +70,25 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('creates a bullet list from the input fallback when space arrives after a fast asterisk', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.textContent = '* '
+    setCollapsedSelection(editor.element.firstChild!, 2)
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(wrapper.find('.ce-wysiwyg ul > li').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('opens a link on ctrl click', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
