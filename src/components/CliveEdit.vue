@@ -302,6 +302,8 @@ function handleMarkdownAction(action: string): void {
     case 'heading3': md.insertSyntax('### ', ''); break
     case 'bulletList': md.insertSyntax('- ', ''); break
     case 'orderedList': md.insertSyntax('1. ', ''); break
+    case 'indentList': md.indentList(); break
+    case 'outdentList': md.outdentList(); break
     case 'blockquote': md.insertSyntax('> ', ''); break
     case 'codeInline': md.insertSyntax('`', '`'); break
     case 'codeBlock': md.insertBlock('\n```language\n\n```\n'); break
