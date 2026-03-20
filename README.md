@@ -299,7 +299,23 @@ The built-in toolbar includes 19 buttons plus a mode toggle:
 
 ### Custom Toolbar
 
-Pass a `toolbarItems` array to replace the entire toolbar:
+`toolbarItems` lets you define your own toolbar layout.
+
+Important behavior:
+
+- `toolbarItems` replaces the built-in toolbar completely.
+- A toolbar item can be either:
+  - a built-in editor action via `action: ToolbarAction`
+  - a custom button via `onClick: (ctx) => void`
+- If you want to append to the built-in toolbar instead of rewriting it manually, use the exported `defaultToolbarItems`.
+
+That means:
+
+- If you want a smaller toolbar, pass only the buttons you want.
+- If you want to add one extra button to the default toolbar, spread `defaultToolbarItems` and append your own item.
+- Custom buttons can run application-specific logic and can also use the injected `EditorContext`, including `ctx.insertText(...)`.
+
+Example: append an application-specific button to the built-in toolbar.
 
 ```vue
 <template>
@@ -308,13 +324,48 @@ Pass a `toolbarItems` array to replace the entire toolbar:
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { CliveEdit } from '@dev_owl/cliveedit'
+import { CliveEdit, defaultToolbarItems } from '@dev_owl/cliveedit'
 import type { ToolbarItem } from '@dev_owl/cliveedit'
-import { Bold, Italic, Heading1 } from 'lucide-vue-next'
+import { CalendarClock } from 'lucide-vue-next'
 
 const content = ref('')
 
 const myToolbar: ToolbarItem[] = [
+  ...defaultToolbarItems,
+  {
+    id: 'insert-date-time',
+    label: 'Insert Date/Time',
+    icon: CalendarClock,
+    divider: true,
+    onClick: (ctx) => {
+      const formatted = new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date())
+
+      ctx.insertText(formatted)
+    },
+  },
+]
+</script>
+```
+
+Example: build a smaller toolbar from built-in actions only.
+
+```vue
+<template>
+  <CliveEdit v-model="content" :toolbar-items="compactToolbar" />
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { CliveEdit } from '@dev_owl/cliveedit'
+import type { ToolbarItem } from '@dev_owl/cliveedit'
+import { Bold, Italic, Heading1, Link, Undo2, Redo2 } from 'lucide-vue-next'
+
+const content = ref('')
+
+const compactToolbar: ToolbarItem[] = [
   {
     id: 'bold',
     label: 'Bold',
@@ -336,23 +387,60 @@ const myToolbar: ToolbarItem[] = [
     label: 'Heading 1',
     icon: Heading1,
     action: 'heading1',
-    divider: true,  // renders a separator before this item
+    divider: true,
+  },
+  {
+    id: 'link',
+    label: 'Link',
+    icon: Link,
+    action: 'link',
+    shortcut: 'Ctrl+K',
+    active: (ctx) => ctx.isActive('a'),
+  },
+  {
+    id: 'undo',
+    label: 'Undo',
+    icon: Undo2,
+    action: 'undo',
+    divider: true,
+  },
+  {
+    id: 'redo',
+    label: 'Redo',
+    icon: Redo2,
+    action: 'redo',
   },
 ]
 </script>
 ```
 
+`toolbarItems` still replaces the full rendered toolbar, but exporting `defaultToolbarItems` makes extension practical.
+
 #### ToolbarItem Interface
 
 ```ts
-interface ToolbarItem {
+type ToolbarItem = BuiltInToolbarItem | CustomToolbarItem
+
+interface BuiltInToolbarItem {
   id: string              // Unique identifier
   label: string           // Accessible label / tooltip
   icon: Component         // Vue component (Lucide icon or custom)
   action: ToolbarAction   // Action name dispatched on click
+  onClick?: never
   shortcut?: string       // Keyboard shortcut label (display only)
   active?: (ctx: EditorContext) => boolean   // Active state check
   divider?: boolean       // Show separator before this item
+}
+
+interface CustomToolbarItem {
+  id: string
+  label: string
+  icon: Component
+  onClick: (ctx: EditorContext) => void
+  action?: never
+  shortcut?: string
+  active?: (ctx: EditorContext) => boolean
+  divider?: boolean
 }
 ```
 
@@ -790,6 +878,7 @@ ctx?.bold()
 ctx?.heading(2)
 ctx?.link('https://example.com', 'Example')
 ctx?.table()  // Insert a 3×3 table
+ctx?.insertText(new Date().toISOString())
 
 // Check state
 ctx?.isActive('strong') // true if cursor is inside bold text
@@ -826,6 +915,7 @@ interface EditorContext {
   horizontalRule(): void
   table(): void
   emoji(): void
+  insertText(text: string): void
 
   // History
   undo(): void

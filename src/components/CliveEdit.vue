@@ -40,7 +40,7 @@ import { useHistory } from '@/composables/useHistory'
 import { useEditor } from '@/composables/useEditor'
 import { useHighlighter } from '@/composables/useHighlighter'
 import { useEmojiPicker } from '@/composables/useEmojiPicker'
-import { runMarkdownCommand } from '@/markdownCommands'
+import { getHeadingAction, runMarkdownCommand, runWysiwygCommand } from '@/commands'
 import { saveSelection, restoreSelection } from '@/utils/selection'
 import type { SavedSelection } from '@/utils/selection'
 import type {
@@ -236,58 +236,6 @@ function toggleMode(): void {
 
 /* ---- Toolbar action dispatch ---- */
 
-type DispatchableToolbarAction = Exclude<ToolbarAction, 'emoji'>
-
-const headingActionMap = {
-  1: 'heading1',
-  2: 'heading2',
-  3: 'heading3',
-} as const
-
-const wysiwygActionHandlers: Record<DispatchableToolbarAction, () => void> = {
-  bold: () => editor.bold(),
-  italic: () => editor.italic(),
-  strikethrough: () => editor.strikethrough(),
-  heading1: () => editor.heading(1),
-  heading2: () => editor.heading(2),
-  heading3: () => editor.heading(3),
-  bulletList: () => editor.bulletList(),
-  orderedList: () => editor.orderedList(),
-  indentList: () => editor.indentList(),
-  outdentList: () => editor.outdentList(),
-  blockquote: () => editor.blockquote(),
-  codeInline: () => editor.codeInline(),
-  codeBlock: () => editor.codeBlock(),
-  link: () => editor.link(),
-  image: () => editor.image(),
-  horizontalRule: () => editor.horizontalRule(),
-  table: () => editor.table(),
-  undo: () => doUndo(),
-  redo: () => doRedo(),
-}
-
-const markdownActionHandlers: Record<DispatchableToolbarAction, () => void> = {
-  bold: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'bold'),
-  italic: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'italic'),
-  strikethrough: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'strikethrough'),
-  heading1: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading1'),
-  heading2: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading2'),
-  heading3: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading3'),
-  bulletList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'bulletList'),
-  orderedList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'orderedList'),
-  indentList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'indentList'),
-  outdentList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'outdentList'),
-  blockquote: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'blockquote'),
-  codeInline: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'codeInline'),
-  codeBlock: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'codeBlock'),
-  link: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'link'),
-  image: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'image'),
-  horizontalRule: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'horizontalRule'),
-  table: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'table'),
-  undo: () => doUndo(),
-  redo: () => doRedo(),
-}
-
 function createContextAction(action: ToolbarAction): () => void {
   return () => handleToolbarAction(action)
 }
@@ -317,20 +265,23 @@ function handleToolbarAction(actionName: ToolbarAction): void {
   }
 
   if (currentMode.value === 'wysiwyg') {
-    handleModeAction(actionName, wysiwygActionHandlers)
-    if (actionName !== 'undo' && actionName !== 'redo') {
+    const executed = runWysiwygCommand(
+      {
+        ...editor,
+        undo: doUndo,
+        redo: doRedo,
+      },
+      actionName,
+    )
+    if (executed && actionName !== 'undo' && actionName !== 'redo') {
       syncWysiwygToMarkdown()
     }
   } else {
-    handleModeAction(actionName, markdownActionHandlers)
+    const md = markdownRef.value
+    if (md) {
+      runMarkdownCommand(md, actionName)
+    }
   }
-}
-
-function handleModeAction(
-  action: DispatchableToolbarAction,
-  handlers: Record<DispatchableToolbarAction, () => void>,
-): void {
-  handlers[action]()
 }
 
 /* ---- Emoji picker ---- */
@@ -374,6 +325,19 @@ function onEmojiSelect(unicode: string): void {
   } else {
     // Markdown mode — insert at textarea cursor
     markdownRef.value?.insertBlock(unicode)
+  }
+}
+
+function insertTextAtCursor(text: string): void {
+  if (!text) return
+
+  history.pushImmediate(props.modelValue)
+
+  if (currentMode.value === 'wysiwyg') {
+    document.execCommand('insertText', false, text)
+    syncWysiwygToMarkdown()
+  } else {
+    markdownRef.value?.insertBlock(text)
   }
 }
 
@@ -428,7 +392,7 @@ const editorContext = reactive<EditorContext>({
   bold: createContextAction('bold'),
   italic: createContextAction('italic'),
   strikethrough: createContextAction('strikethrough'),
-  heading: (level: 1 | 2 | 3) => handleToolbarAction(headingActionMap[level]),
+  heading: (level: 1 | 2 | 3) => handleToolbarAction(getHeadingAction(level)),
   bulletList: createContextAction('bulletList'),
   orderedList: createContextAction('orderedList'),
   indentList: createContextAction('indentList'),
@@ -441,6 +405,7 @@ const editorContext = reactive<EditorContext>({
   horizontalRule: createContextAction('horizontalRule'),
   table: createContextAction('table'),
   emoji: createContextAction('emoji'),
+  insertText: insertTextAtCursor,
   undo: doUndo,
   redo: doRedo,
   canUndo: history.canUndo.value,

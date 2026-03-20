@@ -20,6 +20,8 @@ export { useEmojiPicker } from './composables/useEmojiPicker'
 export type {
   EditorMode,
   ToolbarAction,
+  BuiltInToolbarItem,
+  CustomToolbarItem,
   ToolbarItem,
   HistoryEntry,
   CliveEditProps,
@@ -29,6 +31,7 @@ export type {
   EmojiPickerOptions,
 } from './types'
 export { EDITOR_CTX_KEY } from './types'
+export { defaultToolbarItems } from './commands'
 
 // Vue plugin
 export { CliveEditPlugin } from './plugin'

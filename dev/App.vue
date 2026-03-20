@@ -93,6 +93,7 @@ import {
   Undo2,
   Redo2,
   Smile,
+  CalendarClock,
 } from 'lucide-vue-next'
 import readmeContent from '../README.md?raw'
 
@@ -269,6 +270,16 @@ const allToolbarFeatures: FeatureDef[] = [
       shortcut: 'Ctrl+Shift+Z',
     },
   },
+  {
+    id: 'insertDateTime', label: 'Insert Date/Time',
+    toolbarItem: {
+      id: 'insertDateTime',
+      label: 'Insert Date/Time',
+      icon: CalendarClock,
+      divider: true,
+      onClick: (ctx) => ctx.insertText(formatCurrentDateTime()),
+    },
+  },
 ]
 
 /* ---- Feature toggles ---- */
@@ -285,6 +296,13 @@ function setAll(on: boolean): void {
   for (const f of allToolbarFeatures) {
     enabledFeatures[f.id] = on
   }
+}
+
+function formatCurrentDateTime(): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date())
 }
 
 /* ---- Computed toolbar items (respects divider placement) ---- */

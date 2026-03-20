@@ -32,15 +32,13 @@ export type ToolbarAction =
 /*  Toolbar                                                            */
 /* ------------------------------------------------------------------ */
 
-export interface ToolbarItem {
+interface ToolbarItemBase {
   /** Unique identifier, e.g. "bold", "heading1" */
   id: string
   /** Human readable label (used for aria-label / tooltip) */
   label: string
   /** Lucide icon component -or- a custom Vue component */
   icon: Component
-  /** Editor action to invoke (matches method names on EditorContext) */
-  action: ToolbarAction
   /** Optional keyboard shortcut label, e.g. "Ctrl+B" */
   shortcut?: string
   /** Return true when the formatting is active at the current cursor */
@@ -48,6 +46,20 @@ export interface ToolbarItem {
   /** Optional group divider — when true a separator is rendered before this item */
   divider?: boolean
 }
+
+export interface BuiltInToolbarItem extends ToolbarItemBase {
+  /** Editor action to invoke (matches method names on EditorContext) */
+  action: ToolbarAction
+  onClick?: never
+}
+
+export interface CustomToolbarItem extends ToolbarItemBase {
+  /** Custom button click handler for application-specific actions */
+  onClick: (ctx: EditorContext) => void
+  action?: never
+}
+
+export type ToolbarItem = BuiltInToolbarItem | CustomToolbarItem
 
 /* ------------------------------------------------------------------ */
 /*  History                                                            */
@@ -162,6 +174,7 @@ export interface EditorContext {
   horizontalRule: () => void
   table: () => void
   emoji: () => void
+  insertText: (text: string) => void
 
   /* --- history ---- */
   undo: () => void

@@ -39,8 +39,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { FileCode, Eye } from 'lucide-vue-next'
-import { defaultToolbarItems } from '@/toolbar'
-import type { ToolbarItem, ToolbarAction, EditorContext, EditorMode } from '@/types'
+import { defaultToolbarItems } from '@/commands'
+import type { ToolbarItem, BuiltInToolbarItem, ToolbarAction, EditorContext, EditorMode } from '@/types'
 
 /* ---- Props / Emits ---- */
 
@@ -61,12 +61,21 @@ const items = computed(() => {
   const base = props.customItems ?? defaultToolbarItems
   if (props.enableEmoji) return base
   // Filter out emoji item when the feature is not enabled
-  return base.filter((item) => item.id !== 'emoji')
+  return base.filter((item) => !isBuiltInItem(item) || item.action !== 'emoji')
 })
 
 /* ---- Action dispatch ---- */
 
 function handleAction(item: ToolbarItem): void {
-  emit('action', item.action)
+  if (isBuiltInItem(item)) {
+    emit('action', item.action)
+    return
+  }
+
+  item.onClick(props.ctx)
+}
+
+function isBuiltInItem(item: ToolbarItem): item is BuiltInToolbarItem {
+  return 'action' in item
 }
 </script>
