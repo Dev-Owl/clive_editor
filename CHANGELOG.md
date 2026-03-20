@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.14
+
+### Changed
+
+- Fixed WYSIWYG auto-format shortcut upgrades so typing `*` and immediately pressing Space still creates a bullet list reliably.
+- Added an input-event fallback for line-start markdown shortcuts in visual mode to avoid missed upgrades when the DOM updates just after the Space keydown.
+
 ## 0.1.13
 
 ### Changed
