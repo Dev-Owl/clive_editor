@@ -40,6 +40,7 @@ import { useHistory } from '@/composables/useHistory'
 import { useEditor } from '@/composables/useEditor'
 import { useHighlighter } from '@/composables/useHighlighter'
 import { useEmojiPicker } from '@/composables/useEmojiPicker'
+import { runMarkdownCommand } from '@/markdownCommands'
 import { saveSelection, restoreSelection } from '@/utils/selection'
 import type { SavedSelection } from '@/utils/selection'
 import type {
@@ -266,23 +267,23 @@ const wysiwygActionHandlers: Record<DispatchableToolbarAction, () => void> = {
 }
 
 const markdownActionHandlers: Record<DispatchableToolbarAction, () => void> = {
-  bold: () => markdownRef.value?.insertSyntax('**', '**'),
-  italic: () => markdownRef.value?.insertSyntax('*', '*'),
-  strikethrough: () => markdownRef.value?.insertSyntax('~~', '~~'),
-  heading1: () => markdownRef.value?.insertSyntax('# ', ''),
-  heading2: () => markdownRef.value?.insertSyntax('## ', ''),
-  heading3: () => markdownRef.value?.insertSyntax('### ', ''),
-  bulletList: () => markdownRef.value?.insertSyntax('- ', ''),
-  orderedList: () => markdownRef.value?.insertSyntax('1. ', ''),
-  indentList: () => markdownRef.value?.indentList(),
-  outdentList: () => markdownRef.value?.outdentList(),
-  blockquote: () => markdownRef.value?.insertSyntax('> ', ''),
-  codeInline: () => markdownRef.value?.insertSyntax('`', '`'),
-  codeBlock: () => markdownRef.value?.insertBlock('\n```language\n\n```\n'),
-  link: () => markdownRef.value?.insertSyntax('[', '](url)'),
-  image: () => markdownRef.value?.insertSyntax('![alt](', ')'),
-  horizontalRule: () => markdownRef.value?.insertBlock('\n---\n'),
-  table: () => markdownRef.value?.insertBlock('\n| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| Cell | Cell | Cell |\n| Cell | Cell | Cell |\n'),
+  bold: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'bold'),
+  italic: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'italic'),
+  strikethrough: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'strikethrough'),
+  heading1: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading1'),
+  heading2: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading2'),
+  heading3: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'heading3'),
+  bulletList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'bulletList'),
+  orderedList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'orderedList'),
+  indentList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'indentList'),
+  outdentList: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'outdentList'),
+  blockquote: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'blockquote'),
+  codeInline: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'codeInline'),
+  codeBlock: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'codeBlock'),
+  link: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'link'),
+  image: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'image'),
+  horizontalRule: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'horizontalRule'),
+  table: () => markdownRef.value && runMarkdownCommand(markdownRef.value, 'table'),
   undo: () => doUndo(),
   redo: () => doRedo(),
 }
