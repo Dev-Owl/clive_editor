@@ -16,5 +16,16 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,vue}'],
+      exclude: [
+        'src/index.ts',
+        'src/plugin.ts',
+        'src/env.d.ts',
+      ],
+    },
   },
 })
