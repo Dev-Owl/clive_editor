@@ -349,14 +349,40 @@ interface ToolbarItem {
   id: string              // Unique identifier
   label: string           // Accessible label / tooltip
   icon: Component         // Vue component (Lucide icon or custom)
-  action: string          // Action name dispatched on click
+  action: ToolbarAction   // Action name dispatched on click
   shortcut?: string       // Keyboard shortcut label (display only)
   active?: (ctx: EditorContext) => boolean   // Active state check
   divider?: boolean       // Show separator before this item
 }
 ```
 
-**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `emoji`, `table`, `undo`, `redo`.
+```ts
+type ToolbarAction =
+  | 'bold'
+  | 'italic'
+  | 'strikethrough'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'bulletList'
+  | 'orderedList'
+  | 'indentList'
+  | 'outdentList'
+  | 'blockquote'
+  | 'codeInline'
+  | 'codeBlock'
+  | 'link'
+  | 'image'
+  | 'horizontalRule'
+  | 'emoji'
+  | 'table'
+  | 'undo'
+  | 'redo'
+```
+
+**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `indentList`, `outdentList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `emoji`, `table`, `undo`, `redo`.
+
+In markdown mode, `indentList` and `outdentList` follow the same structural rules as visual mode: list items only move one level at a time, and indenting requires a valid previous sibling at the target level.
 
 ---
 
@@ -949,6 +975,7 @@ All types are exported for full IntelliSense support:
 ```ts
 import type {
   EditorMode,
+  ToolbarAction,
   ToolbarItem,
   HistoryEntry,
   CliveEditProps,

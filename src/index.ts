@@ -19,6 +19,7 @@ export { useEmojiPicker } from './composables/useEmojiPicker'
 // Types
 export type {
   EditorMode,
+  ToolbarAction,
   ToolbarItem,
   HistoryEntry,
   CliveEditProps,

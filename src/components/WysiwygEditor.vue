@@ -12,6 +12,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { parseMarkdown, serializeHtml } from '@/utils/markdown'
+import type { ToolbarAction } from '@/types'
 import {
   findClosestCell,
   isSelectionCrossCell,
@@ -42,7 +43,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   input: []
   selectionChange: []
-  action: [actionName: string]
+  action: [actionName: ToolbarAction]
 }>()
 
 /* ---- Refs ---- */

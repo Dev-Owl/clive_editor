@@ -48,6 +48,7 @@ import type {
   EditorMode,
   EditorContext,
   ToolbarItem,
+  ToolbarAction,
   EmojiPickerOptions,
 } from '@/types'
 import { EDITOR_CTX_KEY } from '@/types'
@@ -234,7 +235,7 @@ function toggleMode(): void {
 
 /* ---- Toolbar action dispatch ---- */
 
-function handleToolbarAction(actionName: string): void {
+function handleToolbarAction(actionName: ToolbarAction): void {
   if (props.disabled) return
 
   // Emoji action is handled separately (toggle picker)
@@ -255,7 +256,7 @@ function handleToolbarAction(actionName: string): void {
   }
 }
 
-function handleWysiwygAction(action: string): void {
+function handleWysiwygAction(action: ToolbarAction): void {
   switch (action) {
     case 'bold': editor.bold(); break
     case 'italic': editor.italic(); break
@@ -289,7 +290,7 @@ function handleWysiwygAction(action: string): void {
   })
 }
 
-function handleMarkdownAction(action: string): void {
+function handleMarkdownAction(action: ToolbarAction): void {
   const md = markdownRef.value
   if (!md) return
 

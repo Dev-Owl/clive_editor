@@ -6,6 +6,28 @@ import type { Component } from 'vue'
 
 export type EditorMode = 'wysiwyg' | 'markdown'
 
+export type ToolbarAction =
+  | 'bold'
+  | 'italic'
+  | 'strikethrough'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'bulletList'
+  | 'orderedList'
+  | 'indentList'
+  | 'outdentList'
+  | 'blockquote'
+  | 'codeInline'
+  | 'codeBlock'
+  | 'link'
+  | 'image'
+  | 'horizontalRule'
+  | 'emoji'
+  | 'table'
+  | 'undo'
+  | 'redo'
+
 /* ------------------------------------------------------------------ */
 /*  Toolbar                                                            */
 /* ------------------------------------------------------------------ */
@@ -18,7 +40,7 @@ export interface ToolbarItem {
   /** Lucide icon component -or- a custom Vue component */
   icon: Component
   /** Editor action to invoke (matches method names on EditorContext) */
-  action: string
+  action: ToolbarAction
   /** Optional keyboard shortcut label, e.g. "Ctrl+B" */
   shortcut?: string
   /** Return true when the formatting is active at the current cursor */
