@@ -175,6 +175,7 @@ export interface EditorContext {
   table: () => void
   emoji: () => void
   insertText: (text: string) => void
+  insertMarkdown: (markdown: string) => void
 
   /* --- history ---- */
   undo: () => void

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.14
+
+### Changed
+
+- Added `EditorContext.insertMarkdown(markdown)` so custom toolbar buttons can insert markdown-aware content in both modes.
+- Preserved the saved visual-mode selection for custom toolbar insertions so markdown and text buttons insert at the expected caret position after a toolbar click.
+- Clarified the custom toolbar API in the README with separate examples for literal text insertion and markdown insertion.
+- Fixed WYSIWYG auto-format shortcut upgrades so typing `*` and immediately pressing Space still creates a bullet list reliably.
+- Added an input-event fallback for line-start markdown shortcuts in visual mode to avoid missed upgrades when the DOM updates just after the Space keydown.
+
 ## 0.1.13
 
 ### Changed

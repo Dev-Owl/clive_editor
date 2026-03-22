@@ -2,7 +2,7 @@
   <div class="ce-wysiwyg-wrap">
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
-      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput"
+      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput($event)"
       @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
       @mouseup="onSelectionChange" />
   </div>
@@ -136,8 +136,17 @@ watch(
 
 let inputTimer: ReturnType<typeof setTimeout> | null = null
 
-function onInput(): void {
+function onInput(event?: Event): void {
   if (isSyncing) return
+
+  const sel = window.getSelection()
+  // Fallback for quick typing: by the time the browser fires `input`,
+  // the trailing space is already present in the DOM even if the earlier
+  // `keydown` handler missed the just-typed shortcut character.
+  if (event && tryApplyLineStartShortcut(sel, true)) {
+    event.preventDefault?.()
+  }
+
   emit('input')
 
   // Debounced re-highlight of the current code block
@@ -305,132 +314,10 @@ function onKeydown(e: KeyboardEvent): void {
 
   // ---- Space at line start: auto-create lists and headings ----
   // Detects markdown-style shortcuts: `* `, `- `, `1. `, `# `, `## `, `### `
-  if (e.key === ' ' && !mod && !e.shiftKey && sel && sel.rangeCount > 0 && sel.isCollapsed) {
-    // Find the block element the cursor is in
-    let block: HTMLElement | null = null
-    let node: Node | null = sel.anchorNode
-    while (node && node !== editorEl.value) {
-      if (
-        node.nodeType === Node.ELEMENT_NODE &&
-        /^(P|DIV)$/.test((node as HTMLElement).tagName)
-      ) {
-        block = node as HTMLElement
-        break
-      }
-      node = node.parentNode
-    }
-
-    // If no <p>/<div> wrapper found, check if we're in a bare text node
-    // directly inside the editor root (empty document, first line), OR
-    // inside an inline element (e.g. <span>) at the editor root.
-    if (!block && editorEl.value && sel.anchorNode) {
-      const anchor = sel.anchorNode
-
-      // Find the top-level node under the editor root that contains the anchor
-      let directChild: Node | null = anchor
-      let hitBlock = false
-      while (directChild && directChild.parentNode !== editorEl.value) {
-        if (
-          directChild.nodeType === Node.ELEMENT_NODE &&
-          /^(P|DIV|H[1-6]|UL|OL|BLOCKQUOTE|PRE|TABLE)$/.test((directChild as HTMLElement).tagName)
-        ) {
-          hitBlock = true
-          break
-        }
-        directChild = directChild.parentNode
-      }
-
-      if (
-        !hitBlock &&
-        directChild &&
-        directChild.parentNode === editorEl.value
-      ) {
-        // Save cursor offset BEFORE DOM manipulation — moving the text
-        // node into a wrapper can cause the browser to reset the Range,
-        // which would place the cursor at offset 0 (before the first char).
-        const cursorOffset = sel.getRangeAt(0).startOffset
-
-        // Wrap the node in a <p> so the replacement logic below can work
-        const wrapper = document.createElement('p')
-        editorEl.value.insertBefore(wrapper, directChild)
-        wrapper.appendChild(directChild)
-        // Restore cursor position inside the new <p>
-        const newRange = document.createRange()
-        newRange.setStart(anchor, Math.min(cursorOffset, anchor.nodeType === Node.TEXT_NODE ? (anchor as Text).length : 0))
-        newRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(newRange)
-        block = wrapper
-      }
-    }
-
-    // Only act inside a <p> or <div> that is NOT inside a list, blockquote,
-    // table, code block, or heading.  We walk from the block's parent up to
-    // the editor root to check for forbidden containers — this is more
-    // forgiving than requiring `block.parentElement === editorEl.value`,
-    // which breaks when paste or Enter leaves blocks nested inside a <p>.
-    if (
-      block &&
-      editorEl.value &&
-      editorEl.value.contains(block) &&
-      !isInsideSpecialContainer(block)
-    ) {
-      const blockText = (block.textContent || '').replace(/[\u200B\uFEFF]/g, '')
-
-      // ---- Auto bullet list: `* ` or `- ` ----
-      if (blockText === '*' || blockText === '-') {
-        e.preventDefault()
-        const list = document.createElement('ul')
-        const li = document.createElement('li')
-        li.innerHTML = '<br>'
-        list.appendChild(li)
-        block.parentNode!.replaceChild(list, block)
-        // Place cursor inside the empty <li>
-        const newRange = document.createRange()
-        newRange.selectNodeContents(li)
-        newRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(newRange)
-        onInput()
-        return
-      }
-
-      // ---- Auto ordered list: `1.` or any `N.` ----
-      if (/^\d+\.$/.test(blockText)) {
-        e.preventDefault()
-        const list = document.createElement('ol')
-        const startNum = parseInt(blockText, 10)
-        if (startNum !== 1) list.setAttribute('start', String(startNum))
-        const li = document.createElement('li')
-        li.innerHTML = '<br>'
-        list.appendChild(li)
-        block.parentNode!.replaceChild(list, block)
-        const newRange = document.createRange()
-        newRange.selectNodeContents(li)
-        newRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(newRange)
-        onInput()
-        return
-      }
-
-      // ---- Auto heading: `#`, `##`, `###` ----
-      const headingMatch = blockText.match(/^(#{1,3})$/)
-      if (headingMatch) {
-        e.preventDefault()
-        const level = headingMatch[1].length as 1 | 2 | 3
-        const heading = document.createElement(`h${level}`)
-        heading.innerHTML = '<br>'
-        block.parentNode!.replaceChild(heading, block)
-        const newRange = document.createRange()
-        newRange.selectNodeContents(heading)
-        newRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(newRange)
-        onInput()
-        return
-      }
-    }
+  if (e.key === ' ' && !mod && !e.shiftKey && tryApplyLineStartShortcut(sel, false)) {
+    e.preventDefault()
+    onInput()
+    return
   }
 
   // ---- Tab / Shift+Tab inside a list → indent / outdent ----
@@ -1135,6 +1022,60 @@ function onSelectionChange(): void {
   emit('selectionChange')
 }
 
+function tryApplyLineStartShortcut(sel: Selection | null, includeTrailingSpace: boolean): boolean {
+  if (!sel || !sel.rangeCount || !sel.isCollapsed) return false
+
+  const block = findShortcutBlock(sel)
+  if (
+    !block ||
+    !editorEl.value ||
+    !editorEl.value.contains(block) ||
+    isInsideSpecialContainer(block)
+  ) {
+    return false
+  }
+
+  const blockText = normalizeShortcutText(block.textContent || '')
+  const bulletPattern = includeTrailingSpace ? /^([*-]) $/ : /^([*-])$/
+  const orderedPattern = includeTrailingSpace ? /^(\d+)\. $/ : /^(\d+)\.$/
+  const headingPattern = includeTrailingSpace ? /^(#{1,3}) $/ : /^(#{1,3})$/
+
+  if (bulletPattern.test(blockText)) {
+    const list = document.createElement('ul')
+    const li = document.createElement('li')
+    li.innerHTML = '<br>'
+    list.appendChild(li)
+    block.parentNode!.replaceChild(list, block)
+    placeCursorAtStart(sel, li)
+    return true
+  }
+
+  const orderedMatch = blockText.match(orderedPattern)
+  if (orderedMatch) {
+    const list = document.createElement('ol')
+    const startNum = parseInt(orderedMatch[1], 10)
+    if (startNum !== 1) list.setAttribute('start', String(startNum))
+    const li = document.createElement('li')
+    li.innerHTML = '<br>'
+    list.appendChild(li)
+    block.parentNode!.replaceChild(list, block)
+    placeCursorAtStart(sel, li)
+    return true
+  }
+
+  const headingMatch = blockText.match(headingPattern)
+  if (headingMatch) {
+    const level = headingMatch[1].length as 1 | 2 | 3
+    const heading = document.createElement(`h${level}`)
+    heading.innerHTML = '<br>'
+    block.parentNode!.replaceChild(heading, block)
+    placeCursorAtStart(sel, heading)
+    return true
+  }
+
+  return false
+}
+
 /* ---- DOM normalisation helpers ---- */
 
 /** Block-level tags that must NOT be nested inside a <p>. */
@@ -1154,6 +1095,71 @@ function isInsideSpecialContainer(block: HTMLElement): boolean {
     el = el.parentElement
   }
   return false
+}
+
+function findShortcutBlock(sel: Selection): HTMLElement | null {
+  let block: HTMLElement | null = null
+  let node: Node | null = sel.anchorNode
+
+  while (node && node !== editorEl.value) {
+    if (
+      node.nodeType === Node.ELEMENT_NODE &&
+      /^(P|DIV)$/.test((node as HTMLElement).tagName)
+    ) {
+      block = node as HTMLElement
+      break
+    }
+    node = node.parentNode
+  }
+
+  // Empty documents can briefly contain bare text nodes at the editor root.
+  // Wrap that content so the shortcut replacement can still operate.
+  if (!block && editorEl.value && sel.anchorNode) {
+    const anchor = sel.anchorNode
+    let directChild: Node | null = anchor
+    let hitBlock = false
+
+    while (directChild && directChild.parentNode !== editorEl.value) {
+      if (
+        directChild.nodeType === Node.ELEMENT_NODE &&
+        /^(P|DIV|H[1-6]|UL|OL|BLOCKQUOTE|PRE|TABLE)$/.test((directChild as HTMLElement).tagName)
+      ) {
+        hitBlock = true
+        break
+      }
+      directChild = directChild.parentNode
+    }
+
+    if (!hitBlock && directChild && directChild.parentNode === editorEl.value) {
+      const cursorOffset = sel.getRangeAt(0).startOffset
+      const wrapper = document.createElement('p')
+      editorEl.value.insertBefore(wrapper, directChild)
+      wrapper.appendChild(directChild)
+
+      const newRange = document.createRange()
+      newRange.setStart(anchor, Math.min(cursorOffset, anchor.nodeType === Node.TEXT_NODE ? (anchor as Text).length : 0))
+      newRange.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
+      block = wrapper
+    }
+  }
+
+  return block
+}
+
+function normalizeShortcutText(text: string): string {
+  return text
+    .replace(/[\u200B\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+}
+
+function placeCursorAtStart(sel: Selection, el: HTMLElement): void {
+  const newRange = document.createRange()
+  newRange.selectNodeContents(el)
+  newRange.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(newRange)
 }
 
 /**

@@ -23,9 +23,11 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.vue",
+    "tests/**/*.ts",
     "dev/**/*.ts",
     "dev/**/*.vue",
-    "vite.config.ts"
+    "vite.config.ts",
+    "vitest.config.ts"
   ],
   "exclude": [
     "node_modules",
