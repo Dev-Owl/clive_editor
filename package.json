@@ -34,7 +34,9 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "typecheck": "vue-tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "verify:publish": "npm run test && npm run test:e2e && npm run build",
+    "publish:checked": "npm run verify:publish && npm publish",
+    "prepublishOnly": "npm run verify:publish"
   },
   "peerDependencies": {
     "emoji-picker-element": ">=1.0.0",
