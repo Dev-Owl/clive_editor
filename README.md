@@ -313,9 +313,14 @@ That means:
 
 - If you want a smaller toolbar, pass only the buttons you want.
 - If you want to add one extra button to the default toolbar, spread `defaultToolbarItems` and append your own item.
-- Custom buttons can run application-specific logic and can also use the injected `EditorContext`, including `ctx.insertText(...)`.
+- Custom buttons can run application-specific logic and can also use the injected `EditorContext`, including `ctx.insertText(...)` for literal text and `ctx.insertMarkdown(...)` for markdown-aware insertion.
 
-Example: append an application-specific button to the built-in toolbar.
+Insertion semantics:
+
+- `ctx.insertText(text)` always inserts literal text.
+- `ctx.insertMarkdown(markdown)` inserts raw markdown in markdown mode and renders the markdown into rich content in visual mode before syncing it back to the canonical markdown value.
+
+Example: append application-specific buttons to the built-in toolbar and use both insertion modes.
 
 ```vue
 <template>
@@ -346,9 +351,22 @@ const myToolbar: ToolbarItem[] = [
       ctx.insertText(formatted)
     },
   },
+  {
+    id: 'insert-callout',
+    label: 'Insert Callout',
+    icon: CalendarClock,
+    onClick: (ctx) => {
+      ctx.insertMarkdown('> **Note**\n> Review this section before publishing.')
+    },
+  },
 ]
 </script>
 ```
+
+In that example:
+
+- `ctx.insertText(formatted)` inserts the formatted date/time as literal text.
+- `ctx.insertMarkdown('> **Note**\n> ...')` inserts markdown syntax in markdown mode and rendered rich content in visual mode.
 
 Example: build a smaller toolbar from built-in actions only.
 
@@ -879,6 +897,7 @@ ctx?.heading(2)
 ctx?.link('https://example.com', 'Example')
 ctx?.table()  // Insert a 3×3 table
 ctx?.insertText(new Date().toISOString())
+ctx?.insertMarkdown('**Prefilled** _markdown_')
 
 // Check state
 ctx?.isActive('strong') // true if cursor is inside bold text
@@ -916,6 +935,7 @@ interface EditorContext {
   table(): void
   emoji(): void
   insertText(text: string): void
+  insertMarkdown(markdown: string): void
 
   // History
   undo(): void

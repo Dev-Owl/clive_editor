@@ -41,7 +41,8 @@ import { useEditor } from '@/composables/useEditor'
 import { useHighlighter } from '@/composables/useHighlighter'
 import { useEmojiPicker } from '@/composables/useEmojiPicker'
 import { getHeadingAction, runMarkdownCommand, runWysiwygCommand } from '@/commands'
-import { saveSelection, restoreSelection } from '@/utils/selection'
+import { parseMarkdown } from '@/utils/markdown'
+import { insertHtmlAtCursor, saveSelection, restoreSelection } from '@/utils/selection'
 import type { SavedSelection } from '@/utils/selection'
 import type {
   CliveEditProps,
@@ -106,6 +107,7 @@ const emojiPickerComposable = useEmojiPicker()
 const emojiPickerVisible = ref(false)
 const emojiAnchorEl = ref<HTMLElement | null>(null)
 let emojiSavedSelection: SavedSelection | null = null
+let lastWysiwygSelection: SavedSelection | null = null
 
 const emojiPickerOptions = computed<EmojiPickerOptions | undefined>(() => {
   const opt = props.emojiPicker
@@ -215,6 +217,7 @@ function onWysiwygInput(): void {
 
 function onSelectionChange(): void {
   editor.refreshActiveState()
+  lastWysiwygSelection = saveSelection()
 }
 
 /* ---- Mode toggle ---- */
@@ -254,6 +257,25 @@ function syncWysiwygToMarkdown(): void {
       history.pushImmediate(md)
     }
   })
+}
+
+function restoreWysiwygSelection(): void {
+  if (!lastWysiwygSelection) return
+  wysiwygRef.value?.focus()
+  restoreSelection(lastWysiwygSelection)
+}
+
+function renderMarkdownInsertion(markdown: string): string {
+  const container = document.createElement('div')
+  container.innerHTML = parseMarkdown(markdown, {
+    highlight: highlightFn.value ?? undefined,
+  })
+
+  if (container.children.length === 1 && container.firstElementChild?.tagName === 'P') {
+    return (container.firstElementChild as HTMLElement).innerHTML
+  }
+
+  return container.innerHTML
 }
 
 function handleToolbarAction(actionName: ToolbarAction): void {
@@ -342,11 +364,27 @@ function insertTextAtCursor(text: string): void {
   history.pushImmediate(props.modelValue)
 
   if (currentMode.value === 'wysiwyg') {
+    restoreWysiwygSelection()
     document.execCommand('insertText', false, text)
     syncWysiwygToMarkdown()
   } else {
     pendingImmediateMarkdownHistory = true
     markdownRef.value?.insertBlock(text)
+  }
+}
+
+function insertMarkdownAtCursor(markdown: string): void {
+  if (!markdown) return
+
+  history.pushImmediate(props.modelValue)
+
+  if (currentMode.value === 'wysiwyg') {
+    restoreWysiwygSelection()
+    insertHtmlAtCursor(renderMarkdownInsertion(markdown))
+    syncWysiwygToMarkdown()
+  } else {
+    pendingImmediateMarkdownHistory = true
+    markdownRef.value?.insertBlock(markdown)
   }
 }
 
@@ -415,6 +453,7 @@ const editorContext = reactive<EditorContext>({
   table: createContextAction('table'),
   emoji: createContextAction('emoji'),
   insertText: insertTextAtCursor,
+  insertMarkdown: insertMarkdownAtCursor,
   undo: doUndo,
   redo: doRedo,
   canUndo: history.canUndo.value,

@@ -29,4 +29,29 @@ describe('CliveEdit custom toolbar integration', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-03-20 09:00'])
   })
+
+  it('allows a custom toolbar button to insert markdown in markdown mode', async () => {
+    const toolbarItems: ToolbarItem[] = [
+      {
+        id: 'insert-markdown',
+        label: 'Insert Markdown',
+        icon: CalendarClock,
+        onClick: (ctx) => {
+          ctx.insertMarkdown('**bold**')
+        },
+      },
+    ]
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '',
+        mode: 'markdown',
+        toolbarItems,
+      },
+    })
+
+    await wrapper.get('button[aria-label="Insert Markdown"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['**bold**'])
+  })
 })

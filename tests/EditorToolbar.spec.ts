@@ -25,6 +25,7 @@ function createContext(): EditorContext {
     table: vi.fn(),
     emoji: vi.fn(),
     insertText: vi.fn(),
+    insertMarkdown: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
     canUndo: true,

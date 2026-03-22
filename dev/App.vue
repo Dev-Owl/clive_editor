@@ -280,6 +280,15 @@ const allToolbarFeatures: FeatureDef[] = [
       onClick: (ctx) => ctx.insertText(formatCurrentDateTime()),
     },
   },
+  {
+    id: 'insertCallout', label: 'Insert Callout',
+    toolbarItem: {
+      id: 'insertCallout',
+      label: 'Insert Callout',
+      icon: Quote,
+      onClick: (ctx) => ctx.insertMarkdown('> **Note**\n> Review this section before publishing.'),
+    },
+  },
 ]
 
 /* ---- Feature toggles ---- */
