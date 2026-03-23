@@ -47,4 +47,23 @@ describe('markdown utils', () => {
     expect(markdown).toContain('| --- | --- |')
     expect(markdown).toContain('| C | D |')
   })
+
+  it('round-trips bullet lists inside table cells via <br> markers', () => {
+    const html = '<table><thead><tr><th>Header</th></tr></thead><tbody><tr><td><ul><li>One</li><li><strong>Two</strong></li></ul></td></tr></tbody></table>'
+    const markdown = serializeHtml(html)
+    const roundtrip = parseMarkdown(markdown)
+
+    expect(markdown).toContain('| Header |')
+    expect(markdown).toContain('| - One <br> - **Two** |')
+    expect(roundtrip).toContain('<td><ul><li>One</li><li><strong>Two</strong></li></ul></td>')
+  })
+
+  it('round-trips mixed bullet and ordered lists inside table cells', () => {
+    const html = '<table><thead><tr><th>Header 1</th><th>Header 2</th><th>Header 3</th></tr></thead><tbody><tr><td><ul><li>asdasdas</li><li>asdasdas</li><li>asdasasd</li></ul><ol><li>asdasd</li></ol></td><td>Cell</td><td>Cell</td></tr><tr><td>Cell</td><td>Cell</td><td>Cell</td></tr></tbody></table>'
+    const markdown = serializeHtml(html)
+    const roundtrip = parseMarkdown(markdown)
+
+    expect(markdown).toContain('| - asdasdas <br> - asdasdas <br> - asdasasd <br> 1. asdasd |')
+    expect(roundtrip).toContain('<td><ul><li>asdasdas</li><li>asdasdas</li><li>asdasasd</li></ul><ol><li>asdasd</li></ol></td>')
+  })
 })

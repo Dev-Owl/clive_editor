@@ -136,7 +136,8 @@ function escapeAttrStr(str: string): string {
  */
 export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions): string {
   const md = getMdInstance(options?.highlight)
-  return md.render(sanitizeMarkdownTables(markdown))
+  const html = md.render(sanitizeMarkdownTables(markdown))
+  return restoreRichTableCells(html)
 }
 
 /**
@@ -320,7 +321,182 @@ td.addRule('codeLangLabel', {
  * inside the table.  Returns an array of cell counts per row for alignment.
  */
 function cellContent(cell: HTMLElement): string {
-  return td.turndown(cell.innerHTML).replace(/\n/g, ' ').trim()
+  return serializeTableCellContent(cell)
+}
+
+const CELL_BREAK_TOKEN = 'CLIVEEDIT_TABLE_BR_TOKEN'
+const ELEMENT_NODE = 1
+const TEXT_NODE = 3
+
+function serializeTableCellContent(cell: HTMLElement): string {
+  return serializeTableCellNodes(Array.from(cell.childNodes))
+    .replace(new RegExp(`\\s*${CELL_BREAK_TOKEN}\\s*`, 'g'), ' <br> ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function serializeTableCellList(list: HTMLElement): string {
+  return Array.from(list.querySelectorAll(':scope > li'))
+    .map((li, index) => {
+      const content = serializeTableCellNodes(Array.from(li.childNodes))
+        .replace(new RegExp(`\\s*${CELL_BREAK_TOKEN}\\s*`, 'g'), ' <br> ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      const prefix = list.tagName === 'OL' ? `${index + 1}. ` : '- '
+      return `${prefix}${content || ''}`.trimEnd()
+    })
+    .join(` ${CELL_BREAK_TOKEN} `)
+}
+
+function serializeTableCellNodes(nodes: Node[]): string {
+  const parts: string[] = []
+
+  nodes.forEach((node, index) => {
+    if (node.nodeType === TEXT_NODE) {
+      parts.push(td.escape(node.textContent ?? ''))
+      return
+    }
+
+    if (node.nodeType !== ELEMENT_NODE) return
+
+    const el = node as HTMLElement
+    if (el.tagName === 'BR') {
+      parts.push(CELL_BREAK_TOKEN)
+      return
+    }
+
+    if (el.tagName === 'UL' || el.tagName === 'OL') {
+      parts.push(serializeTableCellList(el))
+      if (shouldInsertTableCellBreak(nodes, index)) parts.push(CELL_BREAK_TOKEN)
+      return
+    }
+
+    if (el.tagName === 'DIV' || el.tagName === 'P') {
+      const content = serializeTableCellNodes(Array.from(el.childNodes)).trim()
+      if (content) parts.push(content)
+      if (shouldInsertTableCellBreak(nodes, index)) parts.push(CELL_BREAK_TOKEN)
+      return
+    }
+
+    parts.push(td.turndown(el.outerHTML).replace(/\n/g, ' ').trim())
+  })
+
+  return parts.join('')
+}
+
+function shouldInsertTableCellBreak(nodes: Node[], index: number): boolean {
+  for (const node of nodes.slice(index + 1)) {
+    if (node.nodeType === TEXT_NODE) {
+      if (node.textContent?.trim()) return true
+      continue
+    }
+    if (node.nodeType !== ELEMENT_NODE) continue
+    return (node as HTMLElement).tagName !== 'BR'
+  }
+  return false
+}
+
+function restoreRichTableCells(html: string): string {
+  if (typeof document === 'undefined') return html
+
+  const container = document.createElement('div')
+  container.innerHTML = html
+
+  for (const cell of Array.from(container.querySelectorAll('td, th'))) {
+    restoreRichTableCell(cell as HTMLElement)
+  }
+
+  return container.innerHTML
+}
+
+function restoreRichTableCell(cell: HTMLElement): void {
+  const decodedHtml = cell.innerHTML.replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+  if (decodedHtml !== cell.innerHTML) {
+    cell.innerHTML = decodedHtml
+  }
+
+  if (cell.querySelector('ul, ol')) return
+
+  const segments = cell.innerHTML
+    .split(/<br\s*\/?>/i)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0)
+
+  if (segments.length === 0) return
+
+  const classified = segments.map(classifyTableCellSegment)
+  if (!classified.some((segment) => segment.type === 'bullet' || segment.type === 'ordered')) return
+
+  const fragment = document.createDocumentFragment()
+  let activeList: HTMLOListElement | HTMLUListElement | null = null
+  let activeListType: 'bullet' | 'ordered' | null = null
+
+  const flushList = () => {
+    if (!activeList) return
+    fragment.appendChild(activeList)
+    activeList = null
+    activeListType = null
+  }
+
+  classified.forEach((segment, index) => {
+    if (segment.type === 'bullet' || segment.type === 'ordered') {
+      if (!activeList || activeListType !== segment.type) {
+        flushList()
+        activeList = document.createElement(segment.type === 'ordered' ? 'ol' : 'ul')
+        activeListType = segment.type
+      }
+
+      const li = document.createElement('li')
+      li.innerHTML = segment.content || '<br>'
+      activeList.appendChild(li)
+      return
+    }
+
+    flushList()
+    const wrapper = document.createElement('span')
+    wrapper.innerHTML = segment.content
+    while (wrapper.firstChild) {
+      fragment.appendChild(wrapper.firstChild)
+    }
+    if (index < classified.length - 1) {
+      fragment.appendChild(document.createElement('br'))
+    }
+  })
+
+  flushList()
+
+  if (fragment.childNodes.length > 0) {
+    cell.innerHTML = ''
+    cell.appendChild(fragment)
+  }
+}
+
+function stripHtml(html: string): string {
+  const temp = document.createElement('div')
+  temp.innerHTML = html
+  return temp.textContent?.trim() ?? ''
+}
+
+function classifyTableCellSegment(
+  segment: string,
+): { type: 'bullet' | 'ordered' | 'plain', content: string } {
+  const text = stripHtml(segment)
+  if (/^[-*]\s+/.test(text)) {
+    return {
+      type: 'bullet',
+      content: segment.replace(/^\s*[-*]\s+/, ''),
+    }
+  }
+  if (/^\d+\.\s+/.test(text)) {
+    return {
+      type: 'ordered',
+      content: segment.replace(/^\s*\d+\.\s+/, ''),
+    }
+  }
+  return {
+    type: 'plain',
+    content: segment,
+  }
 }
 
 td.addRule('tableCell', {

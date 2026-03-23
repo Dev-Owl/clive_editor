@@ -224,4 +224,44 @@ describe('WysiwygEditor table flows', () => {
     expect(cell.element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cell.element).toBe(true)
     wrapper.unmount()
   })
+
+  it('exits a top-level empty list item inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<table><tbody><tr><td><ul><li>Cell</li><li><br></li></ul></td></tr></tbody></table>'
+    const emptyItem = editor.element.querySelector('td li:last-child')!
+    setCollapsedSelection(emptyItem, 0)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.querySelector('td')?.innerHTML).toBe('<ul><li>Cell</li></ul><br>')
+    wrapper.unmount()
+  })
+
+  it('outdents an empty nested list item inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<table><tbody><tr><td><ul><li>Cell<ul><li><br></li></ul></li></ul></td></tr></tbody></table>'
+    const emptyNestedItem = editor.element.querySelector('td ul ul li')!
+    setCollapsedSelection(emptyNestedItem, 0)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.querySelector('td')?.innerHTML).toBe('<ul><li>Cell</li><li><br></li></ul>')
+    wrapper.unmount()
+  })
 })

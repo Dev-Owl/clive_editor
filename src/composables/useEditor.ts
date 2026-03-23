@@ -162,8 +162,12 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0) return
 
-    // Guard: don't insert lists inside table cells
-    if (findClosestCell(sel.anchorNode)) return
+    const activeCell = findClosestCell(sel.anchorNode, sel.anchorOffset)
+    if (activeCell) {
+      insertListInTableCell(activeCell, sel, listTag)
+      refreshActiveState()
+      return
+    }
 
     // Determine the opposite list type
     const otherTag: 'ul' | 'ol' = listTag === 'ul' ? 'ol' : 'ul'
@@ -291,6 +295,173 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
     }
     refreshActiveState()
+  }
+
+  function insertListInTableCell(
+    cell: HTMLTableCellElement,
+    sel: Selection,
+    listTag: 'ul' | 'ol',
+  ): void {
+    const existingList = getStandaloneCellList(cell)
+    if (existingList) {
+      if (existingList.tagName.toLowerCase() === listTag) {
+        unwrapTableCellList(cell, existingList, sel)
+        return
+      }
+
+      const converted = convertListType(existingList, listTag)
+      const firstItem = converted.querySelector(':scope > li') as HTMLElement | null
+      placeCursorInNode(sel, firstItem ?? converted, true)
+      return
+    }
+
+    const range = sel.getRangeAt(0).cloneRange()
+    if (
+      sel.isCollapsed ||
+      !isNodeInsideCell(cell, range.startContainer) ||
+      !isNodeInsideCell(cell, range.endContainer)
+    ) {
+      range.selectNodeContents(cell)
+    }
+
+    const fragment = range.extractContents()
+    const list = document.createElement(listTag)
+    const items = createTableCellListItems(fragment)
+    for (const item of items) {
+      list.appendChild(item)
+    }
+
+    range.insertNode(list)
+    placeCursorInNode(sel, list.lastElementChild as HTMLElement | null ?? list, true)
+  }
+
+  function getStandaloneCellList(cell: HTMLTableCellElement): HTMLElement | null {
+    const meaningful = Array.from(cell.childNodes).filter((node) => {
+      if (node.nodeType !== Node.TEXT_NODE) return true
+      return !!node.textContent?.trim()
+    })
+
+    if (meaningful.length !== 1) return null
+    const onlyChild = meaningful[0]
+    if (
+      onlyChild.nodeType === Node.ELEMENT_NODE &&
+      ((onlyChild as HTMLElement).tagName === 'UL' || (onlyChild as HTMLElement).tagName === 'OL')
+    ) {
+      return onlyChild as HTMLElement
+    }
+    return null
+  }
+
+  function unwrapTableCellList(
+    cell: HTMLTableCellElement,
+    list: HTMLElement,
+    sel: Selection,
+  ): void {
+    const fragment = document.createDocumentFragment()
+    const items = Array.from(list.querySelectorAll(':scope > li'))
+
+    items.forEach((li, index) => {
+      while (li.firstChild) {
+        fragment.appendChild(li.firstChild)
+      }
+      if (index < items.length - 1) {
+        fragment.appendChild(document.createElement('br'))
+      }
+    })
+
+    cell.innerHTML = ''
+    cell.appendChild(fragment)
+    placeCursorInNode(sel, cell, true)
+  }
+
+  function createTableCellListItems(fragment: DocumentFragment): HTMLLIElement[] {
+    const container = document.createElement('div')
+    container.appendChild(fragment)
+
+    const standaloneList = getStandaloneListFromContainer(container)
+    if (standaloneList) {
+      return Array.from(standaloneList.querySelectorAll(':scope > li')).map((li) => {
+        const item = document.createElement('li')
+        item.innerHTML = li.innerHTML || '<br>'
+        return item
+      })
+    }
+
+    const items: HTMLLIElement[] = []
+    let currentItem = document.createElement('li')
+    let hasContent = false
+
+    const flushCurrentItem = () => {
+      if (!hasContent) {
+        if (items.length === 0) {
+          currentItem.innerHTML = '<br>'
+          items.push(currentItem)
+        }
+        currentItem = document.createElement('li')
+        return
+      }
+
+      items.push(currentItem)
+      currentItem = document.createElement('li')
+      hasContent = false
+    }
+
+    for (const child of Array.from(container.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = (child as HTMLElement).tagName
+        if (tag === 'BR') {
+          flushCurrentItem()
+          continue
+        }
+        if (tag === 'DIV' || tag === 'P') {
+          if (hasContent) flushCurrentItem()
+          const blockItem = document.createElement('li')
+          blockItem.innerHTML = (child as HTMLElement).innerHTML || '<br>'
+          items.push(blockItem)
+          continue
+        }
+      }
+
+      currentItem.appendChild(child)
+      hasContent = hasContent || !!child.textContent?.trim() || child.nodeType === Node.ELEMENT_NODE
+    }
+
+    flushCurrentItem()
+    return items
+  }
+
+  function getStandaloneListFromContainer(container: HTMLElement): HTMLElement | null {
+    const meaningful = Array.from(container.childNodes).filter((node) => {
+      if (node.nodeType !== Node.TEXT_NODE) return true
+      return !!node.textContent?.trim()
+    })
+
+    if (meaningful.length !== 1) return null
+    const onlyChild = meaningful[0]
+    if (
+      onlyChild.nodeType === Node.ELEMENT_NODE &&
+      ((onlyChild as HTMLElement).tagName === 'UL' || (onlyChild as HTMLElement).tagName === 'OL')
+    ) {
+      return onlyChild as HTMLElement
+    }
+    return null
+  }
+
+  function isNodeInsideCell(cell: HTMLTableCellElement, node: Node | null): boolean {
+    return !!node && (node === cell || cell.contains(node))
+  }
+
+  function placeCursorInNode(
+    sel: Selection,
+    node: HTMLElement | null,
+    collapseToEnd = false,
+  ): void {
+    if (!node) return
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    range.collapse(!collapseToEnd)
+    sel.removeAllRanges()
+    sel.addRange(range)
   }
 
   /**
