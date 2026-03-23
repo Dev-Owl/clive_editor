@@ -8,10 +8,15 @@ All notable changes to this project will be documented in this file.
 
 - Fixed WYSIWYG table-cell editing so deleting a backward text selection keeps the caret at the actual deletion point instead of jumping to the start of the cell.
 - Fixed single-cell text replacement in WYSIWYG tables so typed characters replace the selected content in place instead of being appended to the end of the cell.
+- Enabled bullet and ordered list commands inside WYSIWYG table cells so selected cell content can be converted into lists directly in visual mode.
+- Improved table-cell list editing so pressing `Enter` on an empty list item mirrors normal list behavior by outdenting nested items or exiting the list at the top level.
+- Preserved table-cell lists when switching between visual and markdown modes by serializing them with `<br>` separators inside the cell and restoring them back into list markup on render.
+- Fixed mixed bullet and numbered lists inside a single table cell so round-tripping through markdown mode no longer escapes or flattens the numbered items.
 
 ### Internal
 
 - Added regression coverage for backward selections and in-place text replacement inside table cells.
+- Added regression coverage for table-cell list creation, empty-item Enter handling, and mixed list round-tripping in markdown tables.
 
 ## 0.1.14
 

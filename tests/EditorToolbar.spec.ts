@@ -87,4 +87,18 @@ describe('EditorToolbar', () => {
     expect(wrapper.find('button[aria-label="Emoji"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Custom Emoji"]').exists()).toBe(true)
   })
+
+  it('keeps list controls enabled for built-in toolbar items', () => {
+    const wrapper = mount(EditorToolbar, {
+      props: {
+        mode: 'wysiwyg',
+        ctx: createContext(),
+      },
+    })
+
+    expect(wrapper.get('button[aria-label="Bullet List"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('button[aria-label="Ordered List"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('button[aria-label="Indent List"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('button[aria-label="Outdent List"]').attributes('disabled')).toBeUndefined()
+  })
 })

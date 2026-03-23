@@ -336,6 +336,70 @@ function onKeydown(e: KeyboardEvent): void {
 
     // Enter inside a table cell → insert <br> instead of new block
     if (e.key === 'Enter' && !e.shiftKey) {
+      const anchor = sel?.anchorNode
+      const listItem = anchor instanceof HTMLElement
+        ? anchor.closest('li')
+        : anchor?.parentElement?.closest('li')
+
+      if (listItem && (listItem.parentElement?.tagName === 'UL' || listItem.parentElement?.tagName === 'OL')) {
+        e.preventDefault()
+
+        const list = listItem.parentElement
+        const isEmptyItem = !listItem.textContent?.trim() || listItem.innerHTML === '<br>'
+        if (isEmptyItem) {
+          const parentList = list
+          const grandparentLi = parentList?.parentElement
+          const isNested = grandparentLi?.tagName === 'LI'
+          const listWillBeEmpty = parentList?.children.length === 1
+
+          if (isNested && grandparentLi && parentList) {
+            listItem.remove()
+            if (listWillBeEmpty) {
+              parentList.remove()
+            }
+
+            const outerList = grandparentLi.parentElement
+            if (outerList && (outerList.tagName === 'UL' || outerList.tagName === 'OL')) {
+              const newItem = document.createElement('li')
+              newItem.innerHTML = '<br>'
+              outerList.insertBefore(newItem, grandparentLi.nextSibling)
+
+              const range = document.createRange()
+              range.selectNodeContents(newItem)
+              range.collapse(true)
+              sel?.removeAllRanges()
+              sel?.addRange(range)
+            }
+          } else if (parentList) {
+            const exitBreak = document.createElement('br')
+            if (listWillBeEmpty) {
+              parentList.replaceWith(exitBreak)
+            } else {
+              listItem.remove()
+              parentList.parentNode?.insertBefore(exitBreak, parentList.nextSibling)
+            }
+
+            const range = document.createRange()
+            range.setStartAfter(exitBreak)
+            range.collapse(true)
+            sel?.removeAllRanges()
+            sel?.addRange(range)
+          }
+        } else {
+          const newItem = document.createElement('li')
+          newItem.innerHTML = '<br>'
+          list?.insertBefore(newItem, listItem.nextSibling)
+          const range = document.createRange()
+          range.selectNodeContents(newItem)
+          range.collapse(true)
+          sel?.removeAllRanges()
+          sel?.addRange(range)
+        }
+
+        onInput()
+        return
+      }
+
       e.preventDefault()
       if (sel && sel.rangeCount > 0) {
         const range = sel.getRangeAt(0)

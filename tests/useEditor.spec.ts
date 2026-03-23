@@ -68,4 +68,20 @@ describe('useEditor list behavior', () => {
 
     expect(el.innerHTML).toBe('<ul><li>Parent</li><li>Child<ul><li>Sibling</li></ul></li></ul>')
   })
+
+  it('wraps selected table-cell content in a bullet list', () => {
+    const el = createEditor('<table><tbody><tr><td>Cell</td></tr></tbody></table>')
+    const editor = useEditor(ref(el))
+    const cellText = el.querySelector('td')!.firstChild!
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.setStart(cellText, 0)
+    range.setEnd(cellText, 4)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    editor.bulletList()
+
+    expect(el.querySelector('td')?.innerHTML).toBe('<ul><li>Cell</li></ul>')
+  })
 })
