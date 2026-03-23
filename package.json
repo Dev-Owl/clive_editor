@@ -35,7 +35,7 @@
     "test:e2e:headed": "playwright test --headed",
     "typecheck": "vue-tsc --noEmit",
     "verify:publish": "npm run test && npm run test:e2e && npm run build",
-    "publish:checked": "npm run verify:publish && npm publish",
+    "publish:checked": "npm run verify:publish && npm publish --ignore-scripts",
     "prepublishOnly": "npm run verify:publish"
   },
   "peerDependencies": {
