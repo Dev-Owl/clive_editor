@@ -136,6 +136,34 @@ watch(
 
 let inputTimer: ReturnType<typeof setTimeout> | null = null
 
+function buildSafeCellSelectionRange(
+  cell: HTMLTableCellElement,
+  selection: Selection,
+): Range {
+  const safeRange = document.createRange()
+  safeRange.selectNodeContents(cell)
+
+  if (selection.rangeCount === 0) return safeRange
+
+  const originalRange = selection.getRangeAt(0)
+
+  if (
+    cell.contains(originalRange.startContainer) &&
+    safeRange.compareBoundaryPoints(Range.START_TO_START, originalRange) < 0
+  ) {
+    safeRange.setStart(originalRange.startContainer, originalRange.startOffset)
+  }
+
+  if (
+    cell.contains(originalRange.endContainer) &&
+    safeRange.compareBoundaryPoints(Range.END_TO_END, originalRange) > 0
+  ) {
+    safeRange.setEnd(originalRange.endContainer, originalRange.endOffset)
+  }
+
+  return safeRange
+}
+
 function onInput(event?: Event): void {
   if (isSyncing) return
 
@@ -252,30 +280,12 @@ function onKeydown(e: KeyboardEvent): void {
     if (sel && !sel.isCollapsed) {
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault()
-        // Build a range that covers only this cell's content
-        const safeRange = document.createRange()
-        safeRange.selectNodeContents(cell)
-        // Adjust to preserve any content before/after the user's visual selection
-        // by intersecting with the original range
-        const origRange = sel.getRangeAt(0)
-        // Use the later start and the earlier end
-        if (cell.contains(origRange.startContainer) &&
-          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
-          safeRange.setStart(origRange.startContainer, origRange.startOffset)
-        }
-        if (cell.contains(origRange.endContainer) &&
-          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
-          safeRange.setEnd(origRange.endContainer, origRange.endOffset)
-        }
+        const safeRange = buildSafeCellSelectionRange(cell, sel)
         sel.removeAllRanges()
         sel.addRange(safeRange)
         safeRange.deleteContents()
-        // Place cursor inside the cell
-        const cursor = document.createRange()
-        cursor.selectNodeContents(cell)
-        cursor.collapse(true)
         sel.removeAllRanges()
-        sel.addRange(cursor)
+        sel.addRange(safeRange)
         onInput()
         return
       }
@@ -283,24 +293,12 @@ function onKeydown(e: KeyboardEvent): void {
       // Printable character with selection → replace selected text safely
       if (e.key.length === 1 && !mod) {
         e.preventDefault()
-        // Same safe-range approach as above
-        const safeRange = document.createRange()
-        safeRange.selectNodeContents(cell)
-        const origRange = sel.getRangeAt(0)
-        if (cell.contains(origRange.startContainer) &&
-          safeRange.compareBoundaryPoints(Range.START_TO_START, origRange) < 0) {
-          safeRange.setStart(origRange.startContainer, origRange.startOffset)
-        }
-        if (cell.contains(origRange.endContainer) &&
-          safeRange.compareBoundaryPoints(Range.END_TO_END, origRange) > 0) {
-          safeRange.setEnd(origRange.endContainer, origRange.endOffset)
-        }
+        const safeRange = buildSafeCellSelectionRange(cell, sel)
         sel.removeAllRanges()
         sel.addRange(safeRange)
         safeRange.deleteContents()
-        // Insert the typed character
         const text = document.createTextNode(e.key)
-        cell.appendChild(text)
+        safeRange.insertNode(text)
         const cursor = document.createRange()
         cursor.setStartAfter(text)
         cursor.collapse(true)

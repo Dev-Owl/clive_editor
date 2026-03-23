@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WysiwygEditor from '@/components/WysiwygEditor.vue'
-import { setCollapsedSelection, setSelection } from './helpers/wysiwyg'
+import { setBackwardSelection, setCollapsedSelection, setSelection } from './helpers/wysiwyg'
 
 describe('WysiwygEditor table flows', () => {
   beforeEach(() => {
@@ -88,6 +88,30 @@ describe('WysiwygEditor table flows', () => {
     wrapper.unmount()
   })
 
+  it('keeps the caret at the deletion point for backward selections inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A | B |\n| --- | --- |\n| One | Two |',
+      },
+    })
+
+    const cells = wrapper.findAll('td')
+    const firstText = cells[0].element.firstChild!
+    setBackwardSelection(firstText, 3, firstText, 1)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'Backspace' })
+    vi.runAllTimers()
+
+    const selection = window.getSelection()
+    expect(cells[0].text()).toBe('O')
+    expect(selection?.isCollapsed).toBe(true)
+    expect(selection?.anchorNode).toBe(cells[0].element.firstChild)
+    expect(selection?.anchorOffset).toBe(1)
+    expect(cells[1].text()).toBe('Two')
+    wrapper.unmount()
+  })
+
   it('replaces the selected text inside a single table cell with typed input', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
@@ -105,6 +129,28 @@ describe('WysiwygEditor table flows', () => {
 
     expect(cells[0].text()).toBe('Ox')
     expect(cells[1].text()).toBe('Two')
+    wrapper.unmount()
+  })
+
+  it('replaces selected text at the same position inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A |\n| --- |\n| Three |',
+      },
+    })
+
+    const cell = wrapper.get('td')
+    const text = cell.element.firstChild!
+    setSelection(text, 1, text, 3)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'x' })
+    vi.runAllTimers()
+
+    expect(cell.text()).toBe('Txee')
+    const selection = window.getSelection()
+    expect(selection?.isCollapsed).toBe(true)
+    expect(cell.element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cell.element).toBe(true)
     wrapper.unmount()
   })
 })
