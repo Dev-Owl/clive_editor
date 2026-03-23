@@ -135,6 +135,63 @@ watch(
 /* ---- Event handlers ---- */
 
 let inputTimer: ReturnType<typeof setTimeout> | null = null
+type CellBoundaryPoint = { node: Node, offset: number, range: Range }
+
+function isNodeInsideCell(
+  cell: HTMLTableCellElement,
+  node: Node | null,
+): node is Node {
+  return !!node && (node === cell || cell.contains(node))
+}
+
+function createCellBoundaryPoint(
+  cell: HTMLTableCellElement,
+  node: Node | null,
+  offset: number,
+): CellBoundaryPoint | null {
+  if (!isNodeInsideCell(cell, node)) return null
+
+  const pointRange = document.createRange()
+  try {
+    pointRange.setStart(node, offset)
+    pointRange.collapse(true)
+  } catch {
+    return null
+  }
+
+  return { node, offset, range: pointRange }
+}
+
+function getCellSelectionBoundaryPoints(
+  cell: HTMLTableCellElement,
+  selection: Selection,
+): { earliest: CellBoundaryPoint | null, latest: CellBoundaryPoint | null } {
+  let earliest: CellBoundaryPoint | null = null
+  let latest: CellBoundaryPoint | null = null
+
+  for (const candidate of [
+    createCellBoundaryPoint(cell, selection.anchorNode, selection.anchorOffset),
+    createCellBoundaryPoint(cell, selection.focusNode, selection.focusOffset),
+  ]) {
+    if (!candidate) continue
+
+    if (
+      !earliest ||
+      candidate.range.compareBoundaryPoints(Range.START_TO_START, earliest.range) < 0
+    ) {
+      earliest = candidate
+    }
+
+    if (
+      !latest ||
+      candidate.range.compareBoundaryPoints(Range.START_TO_START, latest.range) > 0
+    ) {
+      latest = candidate
+    }
+  }
+
+  return { earliest, latest }
+}
 
 function buildSafeCellSelectionRange(
   cell: HTMLTableCellElement,
@@ -147,18 +204,42 @@ function buildSafeCellSelectionRange(
 
   const originalRange = selection.getRangeAt(0)
 
+  let startAdjusted = false
   if (
-    cell.contains(originalRange.startContainer) &&
+    isNodeInsideCell(cell, originalRange.startContainer) &&
     safeRange.compareBoundaryPoints(Range.START_TO_START, originalRange) < 0
   ) {
     safeRange.setStart(originalRange.startContainer, originalRange.startOffset)
+    startAdjusted = true
   }
 
+  let endAdjusted = false
   if (
-    cell.contains(originalRange.endContainer) &&
+    isNodeInsideCell(cell, originalRange.endContainer) &&
     safeRange.compareBoundaryPoints(Range.END_TO_END, originalRange) > 0
   ) {
     safeRange.setEnd(originalRange.endContainer, originalRange.endOffset)
+    endAdjusted = true
+  }
+
+  if (!startAdjusted || !endAdjusted) {
+    // Some browsers report selection boundary containers on the surrounding
+    // table structure even when the visual selection stays inside one cell.
+    const { earliest: startPoint, latest: endPoint } = getCellSelectionBoundaryPoints(cell, selection)
+
+    if (startPoint !== null && !startAdjusted) {
+      const startRange = startPoint.range
+      if (safeRange.compareBoundaryPoints(Range.START_TO_START, startRange) < 0) {
+        safeRange.setStart(startPoint.node, startPoint.offset)
+      }
+    }
+
+    if (endPoint !== null && !endAdjusted) {
+      const endRange = endPoint.range
+      if (safeRange.compareBoundaryPoints(Range.END_TO_END, endRange) > 0) {
+        safeRange.setEnd(endPoint.node, endPoint.offset)
+      }
+    }
   }
 
   return safeRange
