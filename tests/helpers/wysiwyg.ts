@@ -18,6 +18,15 @@ export function setSelection(startNode: Node, startOffset: number, endNode = sta
   selection?.addRange(range)
 }
 
+export function setBackwardSelection(anchorNode: Node, anchorOffset: number, focusNode = anchorNode, focusOffset = anchorOffset) {
+  const selection = window.getSelection()
+  if (!selection) return
+
+  selection.removeAllRanges()
+  selection.collapse(anchorNode, anchorOffset)
+  selection.extend(focusNode, focusOffset)
+}
+
 export function triggerPaste(
   wrapper: VueWrapper,
   {

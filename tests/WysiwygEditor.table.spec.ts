@@ -1,7 +1,17 @@
 import { mount } from '@vue/test-utils'
+import type { MockInstance } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WysiwygEditor from '@/components/WysiwygEditor.vue'
-import { setCollapsedSelection, setSelection } from './helpers/wysiwyg'
+import { setBackwardSelection, setCollapsedSelection, setSelection } from './helpers/wysiwyg'
+
+function mockSelectionRange(range: Range): MockInstance {
+  const selection = window.getSelection()
+  if (!selection) throw new Error('Selection API is unavailable in this test')
+  return vi.spyOn(selection, 'getRangeAt').mockImplementation((index: number) => {
+    if (index !== 0) throw new DOMException('Invalid range index', 'IndexSizeError')
+    return range
+  })
+}
 
 describe('WysiwygEditor table flows', () => {
   beforeEach(() => {
@@ -88,6 +98,60 @@ describe('WysiwygEditor table flows', () => {
     wrapper.unmount()
   })
 
+  it('keeps the caret at the deletion point for backward selections inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A | B |\n| --- | --- |\n| One | Two |',
+      },
+    })
+
+    const cells = wrapper.findAll('td')
+    const firstText = cells[0].element.firstChild!
+    setBackwardSelection(firstText, 3, firstText, 1)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'Backspace' })
+    vi.runAllTimers()
+
+    const selection = window.getSelection()
+    expect(cells[0].text()).toBe('O')
+    expect(selection?.isCollapsed).toBe(true)
+    expect(cells[0].element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cells[0].element).toBe(true)
+    expect(cells[1].text()).toBe('Two')
+    wrapper.unmount()
+  })
+
+  it('uses the in-cell selection endpoints when the range start is reported on the row', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A | B |\n| --- | --- |\n| One | Two |',
+      },
+    })
+
+    const cells = wrapper.findAll('td')
+    const row = wrapper.get('tr').element
+    const firstText = cells[0].element.firstChild!
+    setBackwardSelection(firstText, 3, firstText, 1)
+
+    const weirdRange = document.createRange()
+    weirdRange.setStart(row, 0)
+    weirdRange.setEnd(firstText, 3)
+    const rangeSpy = mockSelectionRange(weirdRange)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'Backspace' })
+    vi.runAllTimers()
+
+    const selection = window.getSelection()
+    expect(cells[0].text()).toBe('O')
+    expect(cells[1].text()).toBe('Two')
+    expect(selection?.isCollapsed).toBe(true)
+    expect(cells[0].element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cells[0].element).toBe(true)
+
+    rangeSpy.mockRestore()
+    wrapper.unmount()
+  })
+
   it('replaces the selected text inside a single table cell with typed input', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
@@ -105,6 +169,59 @@ describe('WysiwygEditor table flows', () => {
 
     expect(cells[0].text()).toBe('Ox')
     expect(cells[1].text()).toBe('Two')
+    wrapper.unmount()
+  })
+
+  it('uses the in-cell selection endpoints when the range end is reported on the row', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A | B |\n| --- | --- |\n| One | Two |',
+      },
+    })
+
+    const cells = wrapper.findAll('td')
+    const row = wrapper.get('tr').element
+    const secondText = cells[1].element.firstChild!
+    setSelection(secondText, 0, secondText, 2)
+
+    const weirdRange = document.createRange()
+    weirdRange.setStart(secondText, 0)
+    weirdRange.setEnd(row, 2)
+    const rangeSpy = mockSelectionRange(weirdRange)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'x' })
+    vi.runAllTimers()
+
+    const selection = window.getSelection()
+    expect(cells[0].text()).toBe('One')
+    expect(cells[1].text()).toBe('xo')
+    expect(selection?.isCollapsed).toBe(true)
+    expect(cells[1].element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cells[1].element).toBe(true)
+
+    rangeSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('replaces selected text at the same position inside a table cell', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '| A |\n| --- |\n| Three |',
+      },
+    })
+
+    const cell = wrapper.get('td')
+    const text = cell.element.firstChild!
+    setSelection(text, 1, text, 3)
+
+    await wrapper.get('.ce-wysiwyg').trigger('keydown', { key: 'x' })
+    vi.runAllTimers()
+
+    expect(cell.text()).toBe('Txee')
+    const selection = window.getSelection()
+    expect(selection?.isCollapsed).toBe(true)
+    expect(cell.element.contains(selection?.anchorNode ?? null) || selection?.anchorNode === cell.element).toBe(true)
     wrapper.unmount()
   })
 })

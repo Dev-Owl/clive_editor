@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.15
+
+### Changed
+
+- Fixed WYSIWYG table-cell editing so deleting a backward text selection keeps the caret at the actual deletion point instead of jumping to the start of the cell.
+- Fixed single-cell text replacement in WYSIWYG tables so typed characters replace the selected content in place instead of being appended to the end of the cell.
+
+### Internal
+
+- Added regression coverage for backward selections and in-place text replacement inside table cells.
+
 ## 0.1.14
 
 ### Changed
