@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.16
+
+### Changed
+
+- Normalized repeated blank lines created in visual mode so switching to markdown mode no longer inserts alternating empty lines and trailing two-space hard-break lines.
+- Aligned visual-to-markdown whitespace serialization with the editor's rendered behavior so repeated empty visual lines collapse to a single canonical markdown paragraph break.
+
+### Internal
+
+- Added regression coverage for repeated visual blank lines in both the shared markdown serializer and the `CliveEdit` mode-switch integration flow.
+
 ## 0.1.15
 
 ### Changed

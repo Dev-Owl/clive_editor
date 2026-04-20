@@ -41,6 +41,11 @@ describe('markdown utils', () => {
     expect(markdown).toContain('const x = 1;')
   })
 
+  it('collapses consecutive visual blank lines into a single markdown blank line', () => {
+    const markdown = serializeHtml('<p>Line 1<br><br><br>Line 4</p>')
+    expect(markdown).toBe('Line 1\n\nLine 4')
+  })
+
   it('serializes tables with generated separator rows', () => {
     const markdown = serializeHtml('<table><tbody><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></tbody></table>')
     expect(markdown).toContain('| A | B |')

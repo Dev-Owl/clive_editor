@@ -592,9 +592,47 @@ td.addRule('table', {
   },
 })
 
+function normalizeSerializedMarkdown(markdown: string): string {
+  const lines = markdown.split('\n')
+  const normalized: string[] = []
+  let inFence = false
+  let previousBlank = false
+
+  for (const line of lines) {
+    if (/^```/.test(line.trimStart())) {
+      inFence = !inFence
+      normalized.push(line)
+      previousBlank = false
+      continue
+    }
+
+    if (inFence) {
+      normalized.push(line)
+      previousBlank = false
+      continue
+    }
+
+    if (line.trim().length === 0) {
+      if (normalized.length > 0) {
+        normalized[normalized.length - 1] = normalized[normalized.length - 1].replace(/[ \t]+$/, '')
+      }
+      if (!previousBlank) {
+        normalized.push('')
+        previousBlank = true
+      }
+      continue
+    }
+
+    normalized.push(line)
+    previousBlank = false
+  }
+
+  return normalized.join('\n')
+}
+
 /**
  * Convert an HTML string back to markdown.
  */
 export function serializeHtml(html: string): string {
-  return td.turndown(html)
+  return normalizeSerializedMarkdown(td.turndown(html))
 }

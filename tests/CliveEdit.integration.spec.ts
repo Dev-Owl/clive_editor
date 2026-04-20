@@ -256,6 +256,25 @@ describe('CliveEdit orchestration integration', () => {
     expect(wrapper.get('textarea').isVisible()).toBe(true)
   })
 
+  it('normalizes repeated visual blank lines before switching to markdown mode', async () => {
+    const wrapper = mount(CliveEdit, {
+      attachTo: document.body,
+      props: {
+        modelValue: 'Line 1',
+        mode: 'wysiwyg',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg').element as HTMLElement
+    editor.innerHTML = '<p>Line 1<br><br><br>Line 4</p>'
+
+    await wrapper.get('button[aria-label="Switch to Markdown mode"]').trigger('click')
+    await settle()
+
+    expect(wrapper.emitted('update:modelValue')?.map(([value]) => value)).toContain('Line 1\n\nLine 4')
+    expect(wrapper.get('textarea').isVisible()).toBe(true)
+  })
+
   it('exposes public editor methods for state, focus, and history control', async () => {
     const wrapper = mount(CliveEdit, {
       attachTo: document.body,
