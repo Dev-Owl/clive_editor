@@ -256,23 +256,35 @@ describe('CliveEdit orchestration integration', () => {
     expect(wrapper.get('textarea').isVisible()).toBe(true)
   })
 
-  it('normalizes repeated visual blank lines before switching to markdown mode', async () => {
-    const wrapper = mount(CliveEdit, {
-      attachTo: document.body,
-      props: {
-        modelValue: 'Line 1',
-        mode: 'wysiwyg',
+  it('preserves empty visual paragraphs across a markdown mode round-trip', async () => {
+    const Harness = defineComponent({
+      components: { CliveEdit },
+      setup() {
+        const value = ref('Line 1')
+        const mode = ref<'wysiwyg' | 'markdown'>('wysiwyg')
+        return { value, mode }
       },
+      template: '<CliveEdit v-model="value" v-model:mode="mode" />',
+    })
+
+    const wrapper = mount(Harness, {
+      attachTo: document.body,
     })
 
     const editor = wrapper.get('.ce-wysiwyg').element as HTMLElement
-    editor.innerHTML = '<p>Line 1<br><br><br>Line 4</p>'
+    editor.innerHTML = '<p>Line 1</p><p><br></p><p>Line 2</p><p><br></p><p>Line 3</p>'
 
     await wrapper.get('button[aria-label="Switch to Markdown mode"]').trigger('click')
     await settle()
 
-    expect(wrapper.emitted('update:modelValue')?.map(([value]) => value)).toContain('Line 1\n\nLine 4')
-    expect(wrapper.get('textarea').isVisible()).toBe(true)
+    expect((wrapper.vm as { value: string }).value).toContain('\u200B')
+    expect((wrapper.vm as { mode: string }).mode).toBe('markdown')
+
+    await wrapper.get('button[aria-label="Switch to Visual mode"]').trigger('click')
+    await settle()
+
+    const paragraphs = Array.from((wrapper.get('.ce-wysiwyg').element as HTMLElement).querySelectorAll('p')).map((paragraph) => paragraph.innerHTML)
+    expect(paragraphs).toEqual(['Line 1', '<br>', 'Line 2', '<br>', 'Line 3'])
   })
 
   it('exposes public editor methods for state, focus, and history control', async () => {

@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Normalized repeated blank lines created in visual mode so switching to markdown mode no longer inserts alternating empty lines and trailing two-space hard-break lines.
-- Aligned visual-to-markdown whitespace serialization with the editor's rendered behavior so repeated empty visual lines collapse to a single canonical markdown paragraph break.
+- Preserved intentional blank lines created in visual mode when switching to markdown mode and back by encoding them with an invisible round-trip placeholder instead of dropping them during serialization.
+- Fixed visual-to-markdown whitespace serialization so repeated empty visual lines no longer turn into alternating empty lines and trailing two-space hard-break lines in markdown mode.
 
 ### Internal
 
