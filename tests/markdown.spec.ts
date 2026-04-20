@@ -41,6 +41,29 @@ describe('markdown utils', () => {
     expect(markdown).toContain('const x = 1;')
   })
 
+  it('preserves blank lines created with repeated visual line breaks', () => {
+    const markdown = serializeHtml('<p>Line 1<br><br><br>Line 4</p>')
+    const roundtrip = parseMarkdown(markdown)
+    const container = document.createElement('div')
+    container.innerHTML = roundtrip
+
+    expect(markdown).toContain('\u200B')
+    expect(container.querySelector('p')?.textContent).toMatch(/^Line 1\s+Line 4$/)
+    expect(container.querySelectorAll('p br')).toHaveLength(3)
+  })
+
+  it('preserves empty visual paragraphs through markdown roundtrip', () => {
+    const html = '<p>Line 1</p><p><br></p><p>Line 2</p><p><br></p><p>Line 3</p>'
+    const markdown = serializeHtml(html)
+    const roundtrip = parseMarkdown(markdown)
+    const container = document.createElement('div')
+    container.innerHTML = roundtrip
+    const paragraphs = Array.from(container.querySelectorAll('p')).map((paragraph) => paragraph.innerHTML)
+
+    expect(markdown).toContain('\u200B')
+    expect(paragraphs).toEqual(['Line 1', '<br>', 'Line 2', '<br>', 'Line 3'])
+  })
+
   it('serializes tables with generated separator rows', () => {
     const markdown = serializeHtml('<table><tbody><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></tbody></table>')
     expect(markdown).toContain('| A | B |')

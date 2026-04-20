@@ -57,4 +57,30 @@ test.describe('CliveEdit playground', () => {
 
     await expect(page.locator('.debug__pre').first()).toContainText('**Hello**')
   })
+
+  test('visual blank lines survive a markdown round-trip', async ({ page }) => {
+    await page.goto('/')
+
+    const textarea = await clearMarkdownEditor(page)
+    await page.getByRole('button', { name: /Switch to Visual mode/i }).click()
+
+    const editor = page.locator('.ce-wysiwyg')
+    await editor.click()
+    await page.keyboard.type('Line 1')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('Line 2')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('Line 3')
+
+    await page.getByRole('button', { name: /Switch to Markdown mode/i }).click()
+    await expect(textarea).not.toHaveValue('')
+
+    await page.getByRole('button', { name: /Switch to Visual mode/i }).click()
+
+    await expect(page.locator('.ce-wysiwyg')).toContainText('Line 1')
+    await expect(page.locator('.ce-wysiwyg')).toContainText('Line 2')
+    await expect(page.locator('.ce-wysiwyg')).toContainText('Line 3')
+  })
 })

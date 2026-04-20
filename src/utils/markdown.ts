@@ -137,7 +137,7 @@ function escapeAttrStr(str: string): string {
 export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions): string {
   const md = getMdInstance(options?.highlight)
   const html = md.render(sanitizeMarkdownTables(markdown))
-  return restoreRichTableCells(html)
+  return restoreRichTableCells(restoreSerializedBlankLines(html))
 }
 
 /**
@@ -223,6 +223,8 @@ const td = new TurndownService({
   strongDelimiter: '**',
   linkStyle: 'inlined',
 })
+
+const BLANK_LINE_PLACEHOLDER = '\u200B'
 
 /* ---------- URL-safe escaping ---------- */
 
@@ -592,9 +594,87 @@ td.addRule('table', {
   },
 })
 
+function normalizeSerializedMarkdown(markdown: string): string {
+  const lines = markdown.split('\n')
+  const normalized: string[] = []
+  let inFence = false
+  let previousBlank = false
+
+  for (const line of lines) {
+    if (/^```/.test(line.trimStart())) {
+      inFence = !inFence
+      normalized.push(line)
+      previousBlank = false
+      continue
+    }
+
+    if (inFence) {
+      normalized.push(line)
+      previousBlank = false
+      continue
+    }
+
+    if (line.length > 0 && line.trim().length === 0) {
+      normalized.push(BLANK_LINE_PLACEHOLDER)
+      previousBlank = false
+      continue
+    }
+
+    if (line.trim().length === 0) {
+      if (normalized.length > 0) {
+        normalized[normalized.length - 1] = normalized[normalized.length - 1].replace(/[ \t]+$/, '')
+      }
+      if (!previousBlank) {
+        normalized.push('')
+        previousBlank = true
+      }
+      continue
+    }
+
+    normalized.push(line)
+    previousBlank = false
+  }
+
+  return normalized.join('\n')
+}
+
+function restoreSerializedBlankLines(html: string): string {
+  if (!html.includes(BLANK_LINE_PLACEHOLDER)) return html
+
+  if (typeof document === 'undefined') {
+    return html
+      .replace(new RegExp(`<p>${BLANK_LINE_PLACEHOLDER}</p>`, 'g'), '<p><br></p>')
+      .replace(new RegExp(BLANK_LINE_PLACEHOLDER, 'g'), '')
+  }
+
+  const container = document.createElement('div')
+  container.innerHTML = html
+
+  for (const paragraph of Array.from(container.querySelectorAll('p'))) {
+    if (paragraph.childElementCount === 0 && paragraph.textContent === BLANK_LINE_PLACEHOLDER) {
+      paragraph.innerHTML = '<br>'
+    }
+  }
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+  let currentNode = walker.nextNode()
+  while (currentNode) {
+    textNodes.push(currentNode as Text)
+    currentNode = walker.nextNode()
+  }
+
+  textNodes.forEach((node) => {
+    if (!node.textContent?.includes(BLANK_LINE_PLACEHOLDER)) return
+    node.textContent = node.textContent.replace(new RegExp(BLANK_LINE_PLACEHOLDER, 'g'), '')
+  })
+
+  return container.innerHTML
+}
+
 /**
  * Convert an HTML string back to markdown.
  */
 export function serializeHtml(html: string): string {
-  return td.turndown(html)
+  return normalizeSerializedMarkdown(td.turndown(html))
 }
