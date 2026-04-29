@@ -57,10 +57,10 @@ export function createImageMarkdownTitle(
   return `${IMAGE_WIDTH_METADATA_PREFIX}${normalized}${title ? `|${title}` : ''}`
 }
 
-export function parseImageMarkdownTitle(title: string | null | undefined): { width: string | null, title: string | null } {
+export function parseImageMarkdownTitle(title: string | null | undefined): { width: string | null, title: string | null, hadMetadata: boolean } {
   const raw = title?.trim()
   if (!raw?.startsWith(IMAGE_WIDTH_METADATA_PREFIX)) {
-    return { width: null, title: raw || null }
+    return { width: null, title: raw || null, hadMetadata: false }
   }
 
   const payload = raw.slice(IMAGE_WIDTH_METADATA_PREFIX.length)
@@ -71,6 +71,7 @@ export function parseImageMarkdownTitle(title: string | null | undefined): { wid
   return {
     width: normalizeImageWidth(widthValue),
     title: remainingTitle || null,
+    hadMetadata: true,
   }
 }
 
@@ -80,10 +81,10 @@ export function applyImageSizingMetadata(root: ParentNode | HTMLImageElement): v
     : Array.from(root.querySelectorAll('img'))
 
   images.forEach((img) => {
-    const { width, title } = parseImageMarkdownTitle(img.getAttribute('title'))
+    const { width, title, hadMetadata } = parseImageMarkdownTitle(img.getAttribute('title'))
     const appliedWidth = applyImageWidth(img, getImageWidth(img) ?? width)
 
-    if (width) {
+    if (hadMetadata) {
       if (title) {
         img.setAttribute('title', title)
       } else {

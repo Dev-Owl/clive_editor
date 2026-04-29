@@ -1152,7 +1152,6 @@ async function insertImageFile(file: File): Promise<void> {
   const img = document.createElement('img')
   img.src = src
   img.alt = file.name || 'pasted image'
-  applyImageSizingMetadata(img)
 
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0 || !editorEl.value) return
