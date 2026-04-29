@@ -41,6 +41,20 @@ describe('markdown utils', () => {
     expect(markdown).toContain('const x = 1;')
   })
 
+  it('round-trips resized images through markdown metadata', () => {
+    const html = '<p><img src="https://example.com/image.png" alt="Preview" data-ce-width="75%" style="width: 75%; height: auto;"></p>'
+    const markdown = serializeHtml(html)
+    const roundtrip = parseMarkdown(markdown)
+    const container = document.createElement('div')
+    container.innerHTML = roundtrip
+    const image = container.querySelector('img')
+
+    expect(markdown.trim()).toBe('![Preview](https://example.com/image.png "ce-width:75%")')
+    expect(image?.getAttribute('data-ce-width')).toBe('75%')
+    expect(image?.style.width).toBe('75%')
+    expect(image?.getAttribute('title')).toBeNull()
+  })
+
   it('preserves blank lines created with repeated visual line breaks', () => {
     const markdown = serializeHtml('<p>Line 1<br><br><br>Line 4</p>')
     const roundtrip = parseMarkdown(markdown)

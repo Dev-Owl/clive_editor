@@ -170,4 +170,56 @@ describe('WysiwygEditor keyboard flows', () => {
     expect(editor.element.querySelectorAll('ul')).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('shows image resize controls and applies preset widths without changing aspect ratio', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '![Preview](https://example.com/image.png)',
+      },
+    })
+
+    const image = wrapper.get('.ce-wysiwyg img')
+    await image.trigger('click')
+
+    expect(wrapper.find('.ce-image-controls').exists()).toBe(true)
+
+    await wrapper.get('button[title="Resize image to 50%"]').trigger('click')
+    vi.runAllTimers()
+
+    expect(image.attributes('data-ce-width')).toBe('50%')
+    expect((image.element as HTMLImageElement).style.width).toBe('50%')
+    expect((image.element as HTMLImageElement).style.height).toBe('auto')
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('![Preview](https://example.com/image.png "ce-width:50%")')
+    wrapper.unmount()
+  })
+
+  it('focuses the custom image width input so the value can be typed immediately', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '![Preview](https://example.com/image.png)',
+      },
+    })
+
+    await wrapper.get('.ce-wysiwyg img').trigger('click')
+    await wrapper.get('button[title="Custom image size"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const input = wrapper.get('.ce-image-controls__input')
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    input.element.dispatchEvent(mouseDown)
+
+    expect(mouseDown.defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(input.element)
+
+    await input.setValue('65')
+    await wrapper.get('button[title="Apply custom image size"]').trigger('submit')
+    vi.runAllTimers()
+
+    const image = wrapper.get('.ce-wysiwyg img')
+    expect(image.attributes('data-ce-width')).toBe('65%')
+    expect((image.element as HTMLImageElement).style.width).toBe('65%')
+    wrapper.unmount()
+  })
 })

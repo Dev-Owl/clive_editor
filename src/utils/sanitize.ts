@@ -16,7 +16,7 @@ const REMOVE_WITH_CONTENT = new Set([
 /** Attributes that are allowed to stay. Everything else is stripped. */
 const ALLOWED_ATTRS = new Set([
   'href', 'src', 'alt', 'title', 'width', 'height',
-  'colspan', 'rowspan', 'class',
+  'colspan', 'rowspan', 'class', 'data-ce-width',
 ])
 
 /**

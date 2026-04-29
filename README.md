@@ -37,6 +37,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
   - [How It Works](#how-it-works-1)
 - [Image Paste & Drop](#image-paste-drop)
   - [Default Behaviour (Base64)](#default-behaviour-base64)
+  - [Visual Resize Controls](#visual-resize-controls)
   - [Custom Upload Handler](#custom-upload-handler)
   - [Size Limit](#size-limit)
 - [Tables](#tables)
@@ -618,6 +619,8 @@ CliveEdit supports pasting and dragging images directly into the editor. Screens
 
 **Accepted formats:** PNG, JPEG, GIF, WebP
 
+Inserted images are centered automatically in both the editor and the read-only viewer. Resizing only changes the image width, so the browser keeps the original aspect ratio intact.
+
 ### Default Behaviour (Base64)
 
 With no extra configuration, pasted or dropped images are embedded as base64 data URIs:
@@ -634,6 +637,18 @@ The resulting markdown:
 ```
 
 > **Note:** Base64 encoding increases file size by ~33%. For large images, consider using a custom upload handler instead.
+
+### Visual Resize Controls
+
+Click an image in WYSIWYG mode to open its resize tooltip. CliveEdit includes preset width steps of **25%**, **50%**, **75%**, and **100%**, plus a custom percentage field for exact sizing.
+
+Resized images are stored in markdown using image-title metadata, for example:
+
+```markdown
+![Preview](https://example.com/image.png "ce-width:75%")
+```
+
+That metadata is handled automatically by CliveEdit and round-trips cleanly between visual and markdown modes.
 
 ### Custom Upload Handler
 

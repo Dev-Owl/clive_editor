@@ -1,6 +1,50 @@
 <template>
   <div class="ce-wysiwyg-wrap">
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
+    <div
+      v-if="selectedImage"
+      class="ce-image-controls"
+      :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }"
+      @mousedown.stop
+      @click.stop
+    >
+      <div class="ce-image-controls__group">
+        <button
+          v-for="preset in IMAGE_SIZE_PRESETS"
+          :key="preset"
+          type="button"
+          class="ce-image-controls__btn"
+          :class="{ 'ce-image-controls__btn--active': currentImageWidth === preset }"
+          :title="`Resize image to ${preset}`"
+          @click="applyPresetImageWidth(preset)"
+        >
+          {{ preset }}
+        </button>
+        <button
+          type="button"
+          class="ce-image-controls__btn"
+          :class="{ 'ce-image-controls__btn--active': showCustomImageWidth }"
+          title="Custom image size"
+          @click="toggleCustomImageWidth"
+        >
+          Custom
+        </button>
+      </div>
+      <form v-if="showCustomImageWidth" class="ce-image-controls__custom" @submit.prevent="applyCustomImageWidth">
+        <input
+          ref="customImageWidthInput"
+          v-model="customImageWidth"
+          type="number"
+          min="1"
+          max="100"
+          step="1"
+          class="ce-image-controls__input"
+          aria-label="Custom image width percentage"
+        >
+        <span class="ce-image-controls__suffix">%</span>
+        <button type="submit" class="ce-image-controls__btn" title="Apply custom image size">Apply</button>
+      </form>
+    </div>
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
       :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput($event)"
       @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
@@ -9,10 +53,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { parseMarkdown, serializeHtml } from '@/utils/markdown'
 import type { ToolbarAction } from '@/types'
+import {
+  IMAGE_SIZE_PRESETS,
+  applyImageSizingMetadata,
+  applyImageWidth,
+  getImageWidth,
+  normalizeImageWidth,
+} from '@/utils/imageSizing'
 import {
   findClosestCell,
   isSelectionCrossCell,
@@ -50,6 +101,12 @@ const emit = defineEmits<{
 
 const editorEl = ref<HTMLElement | null>(null)
 let isSyncing = false
+const selectedImage = ref<HTMLImageElement | null>(null)
+const currentImageWidth = ref<string | null>(null)
+const showCustomImageWidth = ref(false)
+const customImageWidth = ref('')
+const customImageWidthInput = ref<HTMLInputElement | null>(null)
+const imageControlsPosition = ref({ top: 0, left: 0 })
 
 /* ---- Expose ---- */
 
@@ -63,7 +120,9 @@ defineExpose({
     if (editorEl.value) {
       isSyncing = true
       editorEl.value.innerHTML = html
+      applyImageSizingMetadata(editorEl.value)
       isSyncing = false
+      clearImageSelection()
     }
   },
   /** Sync HTML → markdown and return the markdown */
@@ -79,6 +138,7 @@ defineExpose({
       highlight: props.highlight,
     })
     isSyncing = false
+    clearImageSelection()
   },
   /** Focus the editor */
   focus: () => editorEl.value?.focus(),
@@ -91,17 +151,23 @@ onMounted(() => {
     editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
       highlight: props.highlight,
     })
+    applyImageSizingMetadata(editorEl.value)
   }
   // Listen for modifier keys to show clickable-link cursor hint
   window.addEventListener('keydown', onModifierDown)
   window.addEventListener('keyup', onModifierUp)
   window.addEventListener('blur', onModifierUp)
+  window.addEventListener('resize', updateImageControlsPosition)
+  document.addEventListener('mousedown', onDocumentMouseDown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onModifierDown)
   window.removeEventListener('keyup', onModifierUp)
   window.removeEventListener('blur', onModifierUp)
+  window.removeEventListener('resize', updateImageControlsPosition)
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+  clearImageSelection()
 })
 
 function onModifierDown(e: KeyboardEvent): void {
@@ -111,6 +177,91 @@ function onModifierDown(e: KeyboardEvent): void {
 }
 function onModifierUp(e?: KeyboardEvent | Event): void {
   editorEl.value?.classList.remove('ce-links-clickable')
+}
+
+function clearImageSelection(): void {
+  selectedImage.value?.classList.remove('ce-image--selected')
+  selectedImage.value = null
+  currentImageWidth.value = null
+  showCustomImageWidth.value = false
+  customImageWidth.value = ''
+}
+
+function updateImageControlsPosition(): void {
+  if (!selectedImage.value || !editorEl.value) return
+
+  const wrapRect = editorEl.value.parentElement?.getBoundingClientRect()
+  const imageRect = selectedImage.value.getBoundingClientRect()
+  if (!wrapRect) return
+
+  imageControlsPosition.value = {
+    top: Math.max(8, imageRect.top - wrapRect.top - 44),
+    left: imageRect.left - wrapRect.left + imageRect.width / 2,
+  }
+}
+
+function selectImage(img: HTMLImageElement): void {
+  if (selectedImage.value === img) {
+    currentImageWidth.value = getImageWidth(img)
+    customImageWidth.value = currentImageWidth.value?.replace('%', '') ?? ''
+    nextTick(updateImageControlsPosition)
+    return
+  }
+
+  clearImageSelection()
+  selectedImage.value = img
+  selectedImage.value.classList.add('ce-image--selected')
+  currentImageWidth.value = getImageWidth(img)
+  customImageWidth.value = currentImageWidth.value?.replace('%', '') ?? ''
+  nextTick(updateImageControlsPosition)
+}
+
+function applyImageResize(width: string): void {
+  if (!selectedImage.value) return
+
+  const appliedWidth = applyImageWidth(selectedImage.value, width)
+  if (!appliedWidth) return
+
+  currentImageWidth.value = appliedWidth
+  customImageWidth.value = appliedWidth.replace('%', '')
+  showCustomImageWidth.value = false
+  onInput()
+  nextTick(updateImageControlsPosition)
+}
+
+function applyPresetImageWidth(width: string): void {
+  applyImageResize(width)
+}
+
+function toggleCustomImageWidth(): void {
+  showCustomImageWidth.value = !showCustomImageWidth.value
+  customImageWidth.value = currentImageWidth.value?.replace('%', '') ?? ''
+
+  if (showCustomImageWidth.value) {
+    nextTick(() => {
+      customImageWidthInput.value?.focus()
+      customImageWidthInput.value?.select()
+    })
+  }
+}
+
+function applyCustomImageWidth(): void {
+  const normalizedWidth = normalizeImageWidth(customImageWidth.value)
+  if (!normalizedWidth) return
+  applyImageResize(normalizedWidth)
+}
+
+function onDocumentMouseDown(event: MouseEvent): void {
+  const target = event.target as Node | null
+  const wrapEl = editorEl.value?.parentElement
+
+  if (!target || !wrapEl) {
+    clearImageSelection()
+    return
+  }
+
+  if (wrapEl.contains(target)) return
+  clearImageSelection()
 }
 
 /* ---- Watch external modelValue changes ---- */
@@ -124,9 +275,11 @@ watch(
     const currentMd = serializeHtml(editorEl.value.innerHTML)
     if (currentMd !== md) {
       isSyncing = true
+      clearImageSelection()
       editorEl.value.innerHTML = parseMarkdown(md, {
         highlight: props.highlight,
       })
+      applyImageSizingMetadata(editorEl.value)
       isSyncing = false
     }
   },
@@ -247,6 +400,10 @@ function buildSafeCellSelectionRange(
 
 function onInput(event?: Event): void {
   if (isSyncing) return
+
+  if (selectedImage.value && !selectedImage.value.isConnected) {
+    clearImageSelection()
+  }
 
   const sel = window.getSelection()
   // Fallback for quick typing: by the time the browser fires `input`,
@@ -773,8 +930,21 @@ function onKeydown(e: KeyboardEvent): void {
 let activeLangInput: HTMLInputElement | null = null
 
 function onClick(e: MouseEvent): void {
-  // ---- Language label click → show inline input ----
   const target = e.target as HTMLElement
+
+  const image = target instanceof HTMLImageElement
+    ? target
+    : target.closest('img') as HTMLImageElement | null
+  if (image && editorEl.value?.contains(image)) {
+    e.preventDefault()
+    e.stopPropagation()
+    selectImage(image)
+    return
+  }
+
+  clearImageSelection()
+
+  // ---- Language label click → show inline input ----
   if (target.classList?.contains('ce-code-lang')) {
     e.preventDefault()
     e.stopPropagation()
@@ -1005,6 +1175,7 @@ async function insertImageFile(file: File): Promise<void> {
   sel.removeAllRanges()
   sel.addRange(newRange)
 
+  selectImage(img)
   onInput()
 }
 
@@ -1071,6 +1242,7 @@ function onPaste(e: ClipboardEvent): void {
 
   const temp = document.createElement('div')
   temp.innerHTML = cleanHtml
+  applyImageSizingMetadata(temp)
 
   // ---- Flatten pasted list items when pasting inside an existing list ----
   // When the clipboard contains <ul>/<ol> with <li> items and we're pasting
@@ -1162,6 +1334,15 @@ function onPaste(e: ClipboardEvent): void {
 }
 
 function onSelectionChange(): void {
+  const selection = window.getSelection()
+  const anchorNode = selection?.anchorNode
+  const image = anchorNode instanceof HTMLElement
+    ? anchorNode.closest('img')
+    : anchorNode?.parentElement?.closest('img')
+
+  if (!image) {
+    clearImageSelection()
+  }
   emit('selectionChange')
 }
 
