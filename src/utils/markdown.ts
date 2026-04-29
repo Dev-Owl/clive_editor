@@ -133,6 +133,10 @@ function escapeAttrStr(str: string): string {
   return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
+function escapeMarkdownTitle(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 /**
  * Parse a markdown string into an HTML string.
  *
@@ -285,7 +289,7 @@ td.addRule('image', {
       getImageWidth(img),
       img.getAttribute('title'),
     )
-    const escapedTitle = title?.replace(/"/g, '\\"')
+    const escapedTitle = title ? escapeMarkdownTitle(title) : null
     const wrappedSrc = /\s/.test(src) ? `<${src}>` : src
 
     return escapedTitle
