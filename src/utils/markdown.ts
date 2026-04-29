@@ -4,6 +4,11 @@
 
 import MarkdownIt from 'markdown-it'
 import TurndownService from 'turndown'
+import {
+  applyImageSizingMetadata,
+  createImageMarkdownTitle,
+  getImageWidth,
+} from './imageSizing'
 
 /* ---------- Types ---------- */
 
@@ -137,7 +142,7 @@ function escapeAttrStr(str: string): string {
 export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions): string {
   const md = getMdInstance(options?.highlight)
   const html = md.render(sanitizeMarkdownTables(markdown))
-  return restoreRichTableCells(restoreSerializedBlankLines(html))
+  return applyRenderedImageSizing(restoreRichTableCells(restoreSerializedBlankLines(html)))
 }
 
 /**
@@ -265,6 +270,27 @@ td.addRule('strikethrough', {
   filter: ['del', 's'],
   replacement(content) {
     return `~~${content}~~`
+  },
+})
+
+td.addRule('image', {
+  filter: 'img',
+  replacement(_content, node) {
+    const img = node as HTMLImageElement
+    const src = img.getAttribute('src') || ''
+    if (!src) return ''
+
+    const alt = (img.getAttribute('alt') || '').replace(/[[\]\\]/g, '\\$&')
+    const title = createImageMarkdownTitle(
+      getImageWidth(img),
+      img.getAttribute('title'),
+    )
+    const escapedTitle = title?.replace(/"/g, '\\"')
+    const wrappedSrc = /\s/.test(src) ? `<${src}>` : src
+
+    return escapedTitle
+      ? `![${alt}](${wrappedSrc} "${escapedTitle}")`
+      : `![${alt}](${wrappedSrc})`
   },
 })
 
@@ -669,6 +695,15 @@ function restoreSerializedBlankLines(html: string): string {
     node.textContent = node.textContent.replace(new RegExp(BLANK_LINE_PLACEHOLDER, 'g'), '')
   })
 
+  return container.innerHTML
+}
+
+function applyRenderedImageSizing(html: string): string {
+  if (typeof document === 'undefined') return html
+
+  const container = document.createElement('div')
+  container.innerHTML = html
+  applyImageSizingMetadata(container)
   return container.innerHTML
 }
 

@@ -26,13 +26,13 @@ describe('sanitizeHtml', () => {
     const dirty = `
       <!-- comment -->
       <a href="https://example.com" onclick="evil()" style="color:red" data-id="1" title="Example">Link</a>
-      <img src="/image.png" alt="Preview" width="120" height="80" loading="lazy" />
+      <img src="/image.png" alt="Preview" width="120" height="80" loading="lazy" data-ce-width="75%" />
     `
 
     const clean = sanitizeHtml(dirty)
 
     expect(clean).toContain('<a href="https://example.com" title="Example">Link</a>')
-    expect(clean).toContain('<img src="/image.png" alt="Preview" width="120" height="80">')
+    expect(clean).toContain('<img src="/image.png" alt="Preview" width="120" height="80" data-ce-width="75%">')
     expect(clean).not.toContain('onclick')
     expect(clean).not.toContain('style=')
     expect(clean).not.toContain('data-id')
