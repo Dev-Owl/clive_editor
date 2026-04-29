@@ -89,8 +89,6 @@ export function applyImageSizingMetadata(root: ParentNode | HTMLImageElement): v
       } else {
         img.removeAttribute('title')
       }
-    } else if (!appliedWidth) {
-      img.style.height = 'auto'
     }
   })
 }

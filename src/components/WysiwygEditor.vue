@@ -923,7 +923,9 @@ let activeLangInput: HTMLInputElement | null = null
 function onClick(e: MouseEvent): void {
   const target = e.target as HTMLElement
 
-  const image = target.closest('img') as HTMLImageElement | null
+  const image = target instanceof HTMLImageElement
+    ? target
+    : target.closest('img') as HTMLImageElement | null
   if (image && editorEl.value?.contains(image)) {
     e.preventDefault()
     e.stopPropagation()
