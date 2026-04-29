@@ -2,10 +2,10 @@ const IMAGE_WIDTH_METADATA_PREFIX = 'ce-width:'
 
 export const IMAGE_SIZE_PRESETS = ['25%', '50%', '75%', '100%'] as const
 
-export function normalizeImageWidth(value: string | null | undefined): string | null {
+export function normalizeImageWidth(value: string | number | null | undefined): string | null {
   if (!value) return null
 
-  const trimmed = value.trim()
+  const trimmed = String(value).trim()
   const match = trimmed.match(/^(\d+(?:\.\d+)?)%?$/)
   if (!match) return null
 

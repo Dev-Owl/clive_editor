@@ -8,10 +8,12 @@ All notable changes to this project will be documented in this file.
 
 - Preserved intentional blank lines created in visual mode when switching to markdown mode and back by encoding them with an invisible round-trip placeholder instead of dropping them during serialization.
 - Fixed visual-to-markdown whitespace serialization so repeated empty visual lines no longer turn into alternating empty lines and trailing two-space hard-break lines in markdown mode.
+- Added new image size selection mode supporting pre-sets and custom sizes for images in documents
 
 ### Internal
 
 - Added regression coverage for repeated visual blank lines in both the shared markdown serializer and the `CliveEdit` mode-switch integration flow.
+- Added regression coverage for custom image width entry in the WYSIWYG image resize controls.
 
 ## 0.1.15
 

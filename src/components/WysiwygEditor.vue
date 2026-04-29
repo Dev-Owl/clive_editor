@@ -5,7 +5,7 @@
       v-if="selectedImage"
       class="ce-image-controls"
       :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }"
-      @mousedown.prevent
+      @mousedown.stop
       @click.stop
     >
       <div class="ce-image-controls__group">
@@ -32,6 +32,7 @@
       </div>
       <form v-if="showCustomImageWidth" class="ce-image-controls__custom" @submit.prevent="applyCustomImageWidth">
         <input
+          ref="customImageWidthInput"
           v-model="customImageWidth"
           type="number"
           min="1"
@@ -104,6 +105,7 @@ const selectedImage = ref<HTMLImageElement | null>(null)
 const currentImageWidth = ref<string | null>(null)
 const showCustomImageWidth = ref(false)
 const customImageWidth = ref('')
+const customImageWidthInput = ref<HTMLInputElement | null>(null)
 const imageControlsPosition = ref({ top: 0, left: 0 })
 
 /* ---- Expose ---- */
@@ -234,6 +236,13 @@ function applyPresetImageWidth(width: string): void {
 function toggleCustomImageWidth(): void {
   showCustomImageWidth.value = !showCustomImageWidth.value
   customImageWidth.value = currentImageWidth.value?.replace('%', '') ?? ''
+
+  if (showCustomImageWidth.value) {
+    nextTick(() => {
+      customImageWidthInput.value?.focus()
+      customImageWidthInput.value?.select()
+    })
+  }
 }
 
 function applyCustomImageWidth(): void {
