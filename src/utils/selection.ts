@@ -63,6 +63,12 @@ export function wrapSelection(tagName: string): void {
   if (isSelectionCrossCell()) return
 
   const range = sel.getRangeAt(0)
+  const listSelection = getSiblingListItemSelection(range)
+
+  if (listSelection) {
+    wrapSiblingListItemSelection(sel, range, listSelection, tagName)
+    return
+  }
 
   // Check if selection is already within this tag → unwrap or exit
   const ancestor = findAncestor(range.commonAncestorContainer, tagName)
@@ -97,9 +103,8 @@ export function wrapSelection(tagName: string): void {
   }
 
   // Wrap
-  const wrapper = document.createElement(tagName)
-
   if (range.collapsed) {
+    const wrapper = document.createElement(tagName)
     // No text selected — insert placeholder content so the element is
     // visible and interactable.  For <code> use a non-breaking space;
     // for other inline tags use a zero-width space.
@@ -114,15 +119,8 @@ export function wrapSelection(tagName: string): void {
     return
   }
 
-  try {
-    range.surroundContents(wrapper)
-  } catch {
-    // surroundContents fails when selection spans multiple elements.
-    // Fallback: extract, wrap, re-insert.
-    const fragment = range.extractContents()
-    wrapper.appendChild(fragment)
-    range.insertNode(wrapper)
-  }
+  const wrapper = wrapRange(range, tagName)
+  if (!wrapper) return
 
   // Re-select the wrapped content
   sel.removeAllRanges()
@@ -165,8 +163,8 @@ export function wrapBlock(tagName: string, editorEl: HTMLElement): void {
     }
     // If it's a bare text node (or inline), wrap it in a <p>
     if (targetNode.nodeType === Node.TEXT_NODE ||
-        (targetNode.nodeType === Node.ELEMENT_NODE &&
-         !new Set(['P','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','UL','OL']).has((targetNode as HTMLElement).tagName))) {
+      (targetNode.nodeType === Node.ELEMENT_NODE &&
+        !new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'UL', 'OL']).has((targetNode as HTMLElement).tagName))) {
       const p = document.createElement('p')
       editorEl.insertBefore(p, targetNode)
       p.appendChild(targetNode)
@@ -257,6 +255,161 @@ export function insertTextareaSyntax(
 }
 
 /* ---------- Internal helpers ---------- */
+
+function wrapRange(range: Range, tagName: string): HTMLElement | null {
+  const wrapper = document.createElement(tagName)
+
+  try {
+    range.surroundContents(wrapper)
+  } catch {
+    // surroundContents fails when selection spans multiple elements.
+    // Fallback: extract, wrap, re-insert.
+    const fragment = range.extractContents()
+    if (!fragment.childNodes.length) return null
+    wrapper.appendChild(fragment)
+    range.insertNode(wrapper)
+  }
+
+  return wrapper
+}
+
+function getSiblingListItemSelection(range: Range): HTMLLIElement[] | null {
+  if (range.collapsed) return null
+
+  const startItem = findClosestElement(range.startContainer, 'LI')
+  const endItem = findClosestElement(range.endContainer, 'LI')
+  if (!startItem || !endItem || startItem === endItem) return null
+
+  const parentList = startItem.parentElement
+  if (!parentList || parentList !== endItem.parentElement) return null
+  if (parentList.tagName !== 'UL' && parentList.tagName !== 'OL') return null
+
+  const items = Array.from(parentList.children).filter(
+    (child): child is HTMLLIElement => child instanceof HTMLLIElement,
+  )
+  const startIndex = items.indexOf(startItem)
+  const endIndex = items.indexOf(endItem)
+  if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) return null
+
+  return items.slice(startIndex, endIndex + 1)
+}
+
+function wrapSiblingListItemSelection(
+  selection: Selection,
+  sourceRange: Range,
+  items: HTMLLIElement[],
+  tagName: string,
+): void {
+  const itemRanges = items
+    .map((item, index) => createListItemContentRange(item, sourceRange, index === 0, index === items.length - 1))
+    .filter((range): range is Range => range !== null)
+
+  if (itemRanges.length === 0) return
+
+  const shouldUnwrap = itemRanges.every((range) => findAncestor(range.commonAncestorContainer, tagName) !== null)
+
+  if (shouldUnwrap) {
+    const ancestors = new Set<HTMLElement>()
+    itemRanges.forEach((range) => {
+      const ancestor = findAncestor(range.commonAncestorContainer, tagName)
+      if (ancestor) ancestors.add(ancestor)
+    })
+    ancestors.forEach((ancestor) => unwrapNode(ancestor))
+  } else {
+    itemRanges.forEach((range) => {
+      if (findAncestor(range.commonAncestorContainer, tagName)) return
+      wrapRange(range, tagName)
+    })
+  }
+
+  restoreSiblingListItemSelection(selection, items[0], items[items.length - 1])
+}
+
+function createListItemContentRange(
+  item: HTMLLIElement,
+  sourceRange: Range,
+  isStartItem: boolean,
+  isEndItem: boolean,
+): Range | null {
+  const contentNodes = getListItemContentNodes(item)
+  if (contentNodes.length === 0) return null
+
+  const range = document.createRange()
+  const firstNode = contentNodes[0]
+  const lastNode = contentNodes[contentNodes.length - 1]
+
+  if (isStartItem) {
+    range.setStart(sourceRange.startContainer, sourceRange.startOffset)
+  } else {
+    range.setStartBefore(firstNode)
+  }
+
+  if (isEndItem) {
+    range.setEnd(sourceRange.endContainer, sourceRange.endOffset)
+  } else {
+    range.setEndAfter(lastNode)
+  }
+
+  return range.collapsed ? null : range
+}
+
+function getListItemContentNodes(item: HTMLLIElement): Node[] {
+  return Array.from(item.childNodes).filter((node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return true
+    const tagName = (node as HTMLElement).tagName
+    return tagName !== 'UL' && tagName !== 'OL'
+  })
+}
+
+function restoreSiblingListItemSelection(
+  selection: Selection,
+  startItem: HTMLLIElement,
+  endItem: HTMLLIElement,
+): void {
+  const startNode = getListItemBoundaryNode(startItem, 'start')
+  const endNode = getListItemBoundaryNode(endItem, 'end')
+  if (!startNode || !endNode) return
+
+  const range = document.createRange()
+
+  if (startNode.nodeType === Node.TEXT_NODE) {
+    range.setStart(startNode, 0)
+  } else {
+    range.setStartBefore(startNode)
+  }
+
+  if (endNode.nodeType === Node.TEXT_NODE) {
+    range.setEnd(endNode, endNode.textContent?.length ?? 0)
+  } else {
+    range.setEndAfter(endNode)
+  }
+
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+function getListItemBoundaryNode(item: HTMLLIElement, boundary: 'start' | 'end'): Node | null {
+  const contentNodes = getListItemContentNodes(item)
+  if (contentNodes.length === 0) return null
+  return boundary === 'start' ? contentNodes[0] : contentNodes[contentNodes.length - 1]
+}
+
+function findClosestElement(node: Node | null, tagName: string): HTMLElement | null {
+  let current = node
+  const targetTag = tagName.toUpperCase()
+
+  while (current && current !== document.body) {
+    if (
+      current.nodeType === Node.ELEMENT_NODE &&
+      (current as HTMLElement).tagName === targetTag
+    ) {
+      return current as HTMLElement
+    }
+    current = current.parentNode
+  }
+
+  return null
+}
 
 /**
  * Walk up the DOM from `node` to find the nearest ancestor matching `tagName`.

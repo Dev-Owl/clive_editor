@@ -77,6 +77,17 @@ describe('selection utils', () => {
     expect(editor.innerHTML).toBe('<p>Hello world</p>')
   })
 
+  it('wraps sibling list item selections independently', () => {
+    const editor = createEditor('<ul><li>asdasdas</li><li>dasda</li><li>sdasdas</li></ul>')
+    const items = editor.querySelectorAll('li')
+    const lastText = items[2].firstChild!
+
+    setSelection(items[1].firstChild!, 0, lastText, lastText.textContent?.length ?? 0)
+    wrapSelection('strong')
+
+    expect(editor.innerHTML).toBe('<ul><li>asdasdas</li><li><strong>dasda</strong></li><li><strong>sdasdas</strong></li></ul>')
+  })
+
   it('inserts placeholders for collapsed inline wraps and exits inline formatting on repeated call', () => {
     const editor = createEditor('<p>Hello</p>')
     const text = editor.querySelector('p')!.firstChild!

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.17
+
+### Changed
+
+- Fixed visual-mode inline formatting across sibling list-item selections so toolbar actions and keyboard shortcuts like `Ctrl+B` apply formatting to each selected item instead of wrapping the whole selection as a single list block.
+
+### Internal
+
+- Added regression coverage for sibling list-item inline formatting in the shared selection utilities.
+
 ## 0.1.16
 
 ### Changed
