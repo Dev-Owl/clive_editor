@@ -278,7 +278,7 @@ function getSiblingListItemSelection(range: Range): HTMLLIElement[] | null {
 
   const startItem = findClosestElement(range.startContainer, 'LI')
   const endItem = findClosestElement(range.endContainer, 'LI')
-  if (!startItem || !endItem || startItem === endItem) return null
+  if (!(startItem instanceof HTMLLIElement) || !(endItem instanceof HTMLLIElement) || startItem === endItem) return null
 
   const parentList = startItem.parentElement
   if (!parentList || parentList !== endItem.parentElement) return null
