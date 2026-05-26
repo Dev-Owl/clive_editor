@@ -171,6 +171,30 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('flattens pasted markdown-style list text into the current list', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<ul><li>Start</li></ul>'
+    const text = editor.element.querySelector('li')!.firstChild!
+    setCollapsedSelection(text, 5)
+
+    await triggerPaste(wrapper, {
+      text: '- Two\n- Three',
+    })
+    vi.runAllTimers()
+
+    const items = Array.from(editor.element.querySelectorAll('li')).map((item) => item.textContent?.trim())
+    expect(items).toEqual(['Start', 'Two', 'Three'])
+    expect(editor.element.querySelectorAll('ul')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
   it('shows image resize controls and applies preset widths without changing aspect ratio', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

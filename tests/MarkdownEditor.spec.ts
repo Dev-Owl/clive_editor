@@ -61,4 +61,15 @@ describe('MarkdownEditor', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['- Parent\n- Child'])
   })
+
+  it('does not duplicate an existing bullet marker when the bullet-list command is used', async () => {
+    const wrapper = mountEditor('- Progress')
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    selectLine(textarea, '- Progress')
+
+    ;(wrapper.vm as unknown as { bulletList: () => void }).bulletList()
+    await nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
 })
