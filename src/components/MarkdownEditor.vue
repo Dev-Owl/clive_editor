@@ -33,6 +33,8 @@ const emit = defineEmits<{
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 const LIST_MARKER_RE = /^(\s*)([-+*]|\d+\.)(\s+)/
 const LIST_INDENT = '    '
+const BULLET_LIST_MARKER = '- '
+const ORDERED_LIST_MARKER = '1. '
 
 /* ---- Expose ---- */
 
@@ -72,6 +74,14 @@ defineExpose({
 
   indentList: (): void => {
     transformSelectedListLines('indent')
+  },
+
+  bulletList: (): void => {
+    applyListMarker(BULLET_LIST_MARKER)
+  },
+
+  orderedList: (): void => {
+    applyListMarker(ORDERED_LIST_MARKER)
   },
 
   outdentList: (): void => {
@@ -144,6 +154,51 @@ function transformSelectedListLines(direction: 'indent' | 'outdent'): boolean {
   return true
 }
 
+function applyListMarker(marker: typeof BULLET_LIST_MARKER | typeof ORDERED_LIST_MARKER): boolean {
+  const ta = textareaEl.value
+  if (!ta) return false
+
+  const text = ta.value
+  const selectionStart = ta.selectionStart
+  const selectionEnd = ta.selectionEnd
+  const blockStart = getLineStart(text, selectionStart)
+  const lineAnchor = selectionEnd > selectionStart ? selectionEnd - 1 : selectionEnd
+  const blockEnd = getLineEnd(text, lineAnchor)
+  const lines = text.slice(blockStart, blockEnd).split('\n')
+
+  let nextSelectionStart = selectionStart
+  let nextSelectionEnd = selectionEnd
+  let lineOffset = blockStart
+  let changed = false
+
+  const transformedLines = lines.map((line) => {
+    const nextLine = transformLineToListMarker(line, marker)
+    const diff = nextLine.length - line.length
+
+    if (diff !== 0) {
+      changed = true
+      if (lineOffset <= selectionStart) nextSelectionStart += diff
+      if (lineOffset <= selectionEnd) nextSelectionEnd += diff
+    }
+
+    lineOffset += line.length + 1
+    return nextLine
+  })
+
+  if (!changed) return false
+
+  const newValue = text.slice(0, blockStart) + transformedLines.join('\n') + text.slice(blockEnd)
+  emit('update:modelValue', newValue)
+
+  requestAnimationFrame(() => {
+    ta.selectionStart = nextSelectionStart
+    ta.selectionEnd = nextSelectionEnd
+    ta.focus()
+  })
+
+  return true
+}
+
 function transformListLine(lines: string[], lineIndex: number, direction: 'indent' | 'outdent'): string {
   const line = lines[lineIndex]
   const item = parseListItem(line)
@@ -156,6 +211,22 @@ function transformListLine(lines: string[], lineIndex: number, direction: 'inden
 
   if (item.indent.length === 0) return line
   return line.slice(Math.min(item.indent.length, LIST_INDENT.length))
+}
+
+function transformLineToListMarker(
+  line: string,
+  marker: typeof BULLET_LIST_MARKER | typeof ORDERED_LIST_MARKER,
+): string {
+  if (!line.trim()) return line
+
+  const match = line.match(LIST_MARKER_RE)
+  if (match) {
+    const content = line.slice(match[0].length)
+    return `${match[1]}${marker}${content}`
+  }
+
+  const indent = getLeadingWhitespace(line)
+  return `${indent}${marker}${line.slice(indent.length)}`
 }
 
 function canIndentListItem(lines: string[], lineIndex: number, currentItem: ListItemMeta): boolean {

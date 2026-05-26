@@ -136,4 +136,25 @@ describe('WysiwygEditor enter flows', () => {
     expect(editor.element.querySelector('pre')?.textContent).toBe('const\n x = 1;')
     wrapper.unmount()
   })
+
+  it('starts the next list item without carrying inline formatting forward', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<ul><li><del>Done</del></li></ul>'
+    const text = editor.element.querySelector('del')!.firstChild!
+    setCollapsedSelection(text, text.textContent?.length ?? 0)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<ul><li><del>Done</del></li><li><br></li></ul>')
+    expect(editor.element.querySelectorAll('li')[1].querySelector('del')).toBeNull()
+    wrapper.unmount()
+  })
 })

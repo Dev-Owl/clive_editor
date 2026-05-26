@@ -84,4 +84,20 @@ describe('useEditor list behavior', () => {
 
     expect(el.querySelector('td')?.innerHTML).toBe('<ul><li>Cell</li></ul>')
   })
+
+  it('strips existing list markers when turning selected text into a bullet list', () => {
+    const el = createEditor('<p>- Progress</p>')
+    const editor = useEditor(ref(el))
+    const text = el.querySelector('p')!.firstChild!
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.setStart(text, 0)
+    range.setEnd(text, text.textContent?.length ?? 0)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    editor.bulletList()
+
+    expect(el.innerHTML).toBe('<ul><li>Progress</li></ul>')
+  })
 })

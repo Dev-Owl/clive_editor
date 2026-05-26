@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.18
+
+### Changed
+
+- Fixed list creation and paste handling so existing markdown list markers are normalized instead of producing duplicated markers such as `- - Item`.
+- Fixed visual-mode list Enter behavior so inline formatting like strikethrough ends with the current list item and does not automatically continue into the next item.
+
+### Internal
+
+- Added focused regression coverage for markdown-mode list toggling, WYSIWYG list creation and paste normalization, and Enter handling for formatted list items.
+
+## 0.1.17
+
+### Changed
+
+- Fixed visual-mode inline formatting across sibling list-item selections so toolbar actions and keyboard shortcuts like `Ctrl+B` apply formatting to each selected item instead of wrapping the whole selection as a single list block.
+
+### Internal
+
+- Added regression coverage for sibling list-item inline formatting in the shared selection utilities.
+
 ## 0.1.16
 
 ### Changed

@@ -28,7 +28,7 @@ type MarkdownCommandSpec =
   | { kind: 'wrap'; before: string; after: string }
   | { kind: 'prefix'; value: string }
   | { kind: 'block'; value: string }
-  | { kind: 'method'; name: 'indentList' | 'outdentList' }
+  | { kind: 'method'; name: 'bulletList' | 'orderedList' | 'indentList' | 'outdentList' }
 
 type WysiwygCommandSpec =
   | { kind: 'method'; name: 'bold' | 'italic' | 'strikethrough' | 'bulletList' | 'orderedList' | 'indentList' | 'outdentList' | 'blockquote' | 'codeInline' | 'codeBlock' | 'link' | 'image' | 'horizontalRule' | 'table' }
@@ -44,6 +44,8 @@ interface CommandDefinition {
 export interface MarkdownCommandTarget {
   insertSyntax: (before: string, after: string) => void
   insertBlock: (block: string) => void
+  bulletList: () => void
+  orderedList: () => void
   indentList: () => void
   outdentList: () => void
 }
@@ -141,7 +143,7 @@ const commandRegistry: Record<ToolbarAction, CommandDefinition> = {
       divider: true,
       active: (ctx) => ctx.isActive('ul'),
     },
-    markdown: { kind: 'prefix', value: '- ' },
+    markdown: { kind: 'method', name: 'bulletList' },
     wysiwyg: { kind: 'method', name: 'bulletList' },
   },
   orderedList: {
@@ -151,7 +153,7 @@ const commandRegistry: Record<ToolbarAction, CommandDefinition> = {
       icon: ListOrdered,
       active: (ctx) => ctx.isActive('ol'),
     },
-    markdown: { kind: 'prefix', value: '1. ' },
+    markdown: { kind: 'method', name: 'orderedList' },
     wysiwyg: { kind: 'method', name: 'orderedList' },
   },
   indentList: {

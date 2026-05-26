@@ -77,6 +77,7 @@ import TableControls from './TableControls.vue'
 
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const DEFAULT_MAX_IMAGE_SIZE = 2_097_152 // 2 MB
+const LIST_MARKER_TEXT_RE = /^(\s*)([-+*]|\d+\.)\s+(.*)$/
 
 const props = defineProps<{
   modelValue: string
@@ -641,6 +642,26 @@ function onKeydown(e: KeyboardEvent): void {
       const liText = liEl.textContent?.trim()
       const hasChildList = !!liEl.querySelector('ul, ol')
       const isEmpty = !liText && !hasChildList
+
+      if (!isEmpty && isCollapsedSelectionAtListItemContentEnd(sel, liEl)) {
+        const parentList = liEl.parentElement
+        if (parentList && (parentList.tagName === 'UL' || parentList.tagName === 'OL')) {
+          e.preventDefault()
+
+          const newLi = document.createElement('li')
+          newLi.innerHTML = '<br>'
+          parentList.insertBefore(newLi, liEl.nextSibling)
+
+          const newRange = document.createRange()
+          newRange.selectNodeContents(newLi)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+
+          onInput()
+          return
+        }
+      }
 
       if (isEmpty) {
         e.preventDefault()
@@ -1260,27 +1281,34 @@ function onPaste(e: ClipboardEvent): void {
     // Collect <li> elements from pasted lists and insert them as siblings
     // after the current <li> in the parent list.
     const pastedLists = Array.from(temp.querySelectorAll(':scope > ul, :scope > ol'))
-    if (pastedLists.length > 0) {
+    const plainTextListItems = pastedLists.length === 0 ? parsePlainTextListItems(text) : null
+    if (pastedLists.length > 0 || plainTextListItems) {
       // Gather all <li> items to insert as siblings
       const newItems: HTMLLIElement[] = []
       for (const list of pastedLists) {
         for (const li of Array.from(list.querySelectorAll('li'))) {
-          newItems.push(li as HTMLLIElement)
+          newItems.push(normalizeListItemElement(li as HTMLLIElement))
         }
         // Remove the list wrapper from the temp — its items will be inserted
         // directly into the parent list
         list.remove()
       }
 
+      if (plainTextListItems) {
+        newItems.push(...plainTextListItems.map((item) => createTextListItem(item)))
+      }
+
       // Any remaining non-list content in temp goes into the current <li>
       // (e.g. plain text that was before/after the pasted list)
-      const frag = document.createDocumentFragment()
-      let lastInline: Node | null = null
-      while (temp.firstChild) {
-        lastInline = frag.appendChild(temp.firstChild)
-      }
-      if (frag.childNodes.length > 0) {
-        range.insertNode(frag)
+      if (!plainTextListItems) {
+        const frag = document.createDocumentFragment()
+        let lastInline: Node | null = null
+        while (temp.firstChild) {
+          lastInline = frag.appendChild(temp.firstChild)
+        }
+        if (frag.childNodes.length > 0) {
+          range.insertNode(frag)
+        }
       }
 
       // Insert extracted <li> elements after the current <li> in the parent list
@@ -1484,6 +1512,115 @@ function placeCursorAtStart(sel: Selection, el: HTMLElement): void {
   newRange.collapse(true)
   sel.removeAllRanges()
   sel.addRange(newRange)
+}
+
+function parsePlainTextListItems(text: string): string[] | null {
+  const lines = text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+
+  if (lines.length === 0) return null
+
+  const items = lines.map((line) => {
+    const match = line.match(LIST_MARKER_TEXT_RE)
+    return match ? match[3] : null
+  })
+
+  return items.every((item): item is string => item !== null) ? items : null
+}
+
+function createTextListItem(text: string): HTMLLIElement {
+  const li = document.createElement('li')
+  const normalizedText = stripLeadingListMarker(text).trim()
+
+  if (!normalizedText) {
+    li.innerHTML = '<br>'
+    return li
+  }
+
+  li.textContent = normalizedText
+  return li
+}
+
+function normalizeListItemElement(li: HTMLLIElement): HTMLLIElement {
+  const firstTextNode = findFirstListContentTextNode(li)
+  if (firstTextNode) {
+    const normalizedText = stripLeadingListMarker(firstTextNode.textContent ?? '')
+    if (normalizedText !== firstTextNode.textContent) {
+      firstTextNode.textContent = normalizedText
+    }
+  }
+
+  if (!li.textContent?.trim() && !li.querySelector('ul, ol')) {
+    li.innerHTML = '<br>'
+  }
+
+  return li
+}
+
+function findFirstListContentTextNode(root: Node): Text | null {
+  for (const child of Array.from(root.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+      return child as Text
+    }
+
+    if (child.nodeType !== Node.ELEMENT_NODE) continue
+
+    const childElement = child as HTMLElement
+    if (childElement.tagName === 'UL' || childElement.tagName === 'OL') continue
+
+    const nestedTextNode = findFirstListContentTextNode(child)
+    if (nestedTextNode) return nestedTextNode
+  }
+
+  return null
+}
+
+function stripLeadingListMarker(text: string): string {
+  const match = text.match(LIST_MARKER_TEXT_RE)
+  return match ? match[3] : text
+}
+
+function getListItemContentNodes(listItem: HTMLLIElement): Node[] {
+  return Array.from(listItem.childNodes).filter((node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE) return true
+    const tagName = (node as HTMLElement).tagName
+    return tagName !== 'UL' && tagName !== 'OL'
+  })
+}
+
+function findLastListContentTextNode(root: Node): Text | null {
+  const childNodes = Array.from(root.childNodes)
+  for (let index = childNodes.length - 1; index >= 0; index -= 1) {
+    const child = childNodes[index]
+    if (child.nodeType === Node.TEXT_NODE && child.textContent) {
+      return child as Text
+    }
+
+    if (child.nodeType !== Node.ELEMENT_NODE) continue
+
+    const childElement = child as HTMLElement
+    if (childElement.tagName === 'UL' || childElement.tagName === 'OL') continue
+
+    const nestedTextNode = findLastListContentTextNode(child)
+    if (nestedTextNode) return nestedTextNode
+  }
+
+  return null
+}
+
+function isCollapsedSelectionAtListItemContentEnd(selection: Selection, listItem: HTMLLIElement): boolean {
+  if (!selection.isCollapsed || selection.rangeCount === 0) return false
+
+  const lastTextNode = findLastListContentTextNode(listItem)
+  if (lastTextNode) {
+    return selection.focusNode === lastTextNode
+      && selection.focusOffset === (lastTextNode.textContent?.length ?? 0)
+  }
+
+  const contentNodes = getListItemContentNodes(listItem)
+  return contentNodes.length === 0
 }
 
 /**

@@ -15,6 +15,8 @@ import {
   isSelectionCrossCell,
 } from '@/utils/selection'
 
+const LIST_MARKER_RE = /^(\s*)([-+*]|\d+\.)\s+(.*)$/
+
 export function useEditor(editorRef: Ref<HTMLElement | null>) {
   /* ---- active-state tracking ---- */
 
@@ -286,11 +288,33 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
           const text = selectedText
           const lines = text.split('\n').filter(l => l.trim() !== '')
           const items = lines.length > 0
-            ? lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')
+            ? lines.map((line) => {
+              const normalizedLine = normalizeListItemText(line)
+              return normalizedLine
+                ? `<li>${escapeHtml(normalizedLine)}</li>`
+                : '<li><br></li>'
+            }).join('')
             : '<li>List item</li>'
-          const html = `<${listTag}>${items}</${listTag}>`
+          const temp = document.createElement('div')
+          temp.innerHTML = `<${listTag}>${items}</${listTag}>`
+          const list = temp.firstElementChild as HTMLElement | null
           range.deleteContents()
-          insertHtmlAtCursor(html)
+          if (!list) return
+
+          range.insertNode(list)
+          if (list.parentElement && list.parentElement !== el && /^(P|DIV|SPAN)$/.test(list.parentElement.tagName)) {
+            list.parentElement.parentNode?.insertBefore(list, list.parentElement.nextSibling)
+            if (!list.previousElementSibling?.textContent?.trim() || list.previousSibling === list.parentElement) {
+              const prev = list.previousElementSibling
+              if (prev && !prev.textContent?.trim()) prev.remove()
+            }
+          }
+
+          const newRange = document.createRange()
+          newRange.selectNodeContents(list.lastElementChild || list)
+          newRange.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
         }
       }
     }
@@ -736,6 +760,11 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
 
   function escapeAttr(str: string): string {
     return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  }
+
+  function normalizeListItemText(text: string): string {
+    const match = text.match(LIST_MARKER_RE)
+    return (match ? match[3] : text).trim()
   }
 
   return {
