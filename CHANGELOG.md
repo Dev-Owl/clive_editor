@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.19
+
+### Fixed
+
+- Blocked browser-native `Ctrl+U` underline in the WYSIWYG editor since markdown has no underline syntax and the unmanaged `<u>` tags could not round-trip between modes.
+
 ## 0.1.18
 
 ### Changed
