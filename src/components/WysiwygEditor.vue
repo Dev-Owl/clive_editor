@@ -1,54 +1,32 @@
 <template>
   <div class="ce-wysiwyg-wrap">
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
-    <div
-      v-if="selectedImage"
-      class="ce-image-controls"
-      :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }"
-      @mousedown.stop
-      @click.stop
-    >
+    <div v-if="selectedImage" class="ce-image-controls"
+      :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }" @mousedown.stop
+      @click.stop>
       <div class="ce-image-controls__group">
-        <button
-          v-for="preset in IMAGE_SIZE_PRESETS"
-          :key="preset"
-          type="button"
-          class="ce-image-controls__btn"
+        <button v-for="preset in IMAGE_SIZE_PRESETS" :key="preset" type="button" class="ce-image-controls__btn"
           :class="{ 'ce-image-controls__btn--active': currentImageWidth === preset }"
-          :title="`Resize image to ${preset}`"
-          @click="applyPresetImageWidth(preset)"
-        >
+          :title="`Resize image to ${preset}`" @click="applyPresetImageWidth(preset)">
           {{ preset }}
         </button>
-        <button
-          type="button"
-          class="ce-image-controls__btn"
-          :class="{ 'ce-image-controls__btn--active': showCustomImageWidth }"
-          title="Custom image size"
-          @click="toggleCustomImageWidth"
-        >
+        <button type="button" class="ce-image-controls__btn"
+          :class="{ 'ce-image-controls__btn--active': showCustomImageWidth }" title="Custom image size"
+          @click="toggleCustomImageWidth">
           Custom
         </button>
       </div>
       <form v-if="showCustomImageWidth" class="ce-image-controls__custom" @submit.prevent="applyCustomImageWidth">
-        <input
-          ref="customImageWidthInput"
-          v-model="customImageWidth"
-          type="number"
-          min="1"
-          max="100"
-          step="1"
-          class="ce-image-controls__input"
-          aria-label="Custom image width percentage"
-        >
+        <input ref="customImageWidthInput" v-model="customImageWidth" type="number" min="1" max="100" step="1"
+          class="ce-image-controls__input" aria-label="Custom image width percentage">
         <span class="ce-image-controls__suffix">%</span>
         <button type="submit" class="ce-image-controls__btn" title="Apply custom image size">Apply</button>
       </form>
     </div>
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
-      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput($event)"
-      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
-      @mouseup="onSelectionChange" />
+      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true"
+      @input="onInput($event)" @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop"
+      @dragover.prevent @click="onClick" @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -910,16 +888,15 @@ function onKeydown(e: KeyboardEvent): void {
         sel.removeAllRanges()
         sel.addRange(newRange)
       } else {
-        // Code is inside a proper block — move cursor out of the <code>
-        // and insert a line break so new text is unstyled.
+        // Code is inside a proper block — split to a sibling paragraph so the
+        // inline code remains isolated in its original block.
+        const insertionAnchor = findEditorRootAncestor(blockParent)
+        const newP = document.createElement('p')
+        newP.innerHTML = '<br>'
+        insertionAnchor.parentNode?.insertBefore(newP, insertionAnchor.nextSibling)
+
         const range = document.createRange()
-        range.setStartAfter(codeEl)
-        range.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(range)
-        const br = document.createElement('br')
-        range.insertNode(br)
-        range.setStartAfter(br)
+        range.selectNodeContents(newP)
         range.collapse(true)
         sel.removeAllRanges()
         sel.addRange(range)

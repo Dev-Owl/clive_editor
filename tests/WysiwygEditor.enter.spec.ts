@@ -117,6 +117,26 @@ describe('WysiwygEditor enter flows', () => {
     wrapper.unmount()
   })
 
+  it('splits to a new paragraph when pressing Enter inside inline code in a paragraph', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p><code>code</code></p>'
+    const text = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(text, 2)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p><code>code</code></p><p><br></p>')
+    wrapper.unmount()
+  })
+
   it('inserts a newline inside a preformatted code block', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
