@@ -176,7 +176,9 @@ describe('WysiwygEditor enter flows', () => {
     await editor.trigger('keydown', { key: 'Enter' })
     vi.runAllTimers()
 
-    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\n</code></pre>')
+    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\n\u200B</code></pre>')
+    expect(window.getSelection()?.anchorNode?.textContent).toBe('\u200B')
+    expect(window.getSelection()?.anchorOffset).toBe(0)
     wrapper.unmount()
   })
 
@@ -199,7 +201,9 @@ describe('WysiwygEditor enter flows', () => {
     await editor.trigger('keydown', { key: 'Enter' })
     vi.runAllTimers()
 
-    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\nconst y = 2;\n</code></pre>')
+    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\nconst y = 2;\n\u200B</code></pre>')
+    expect(window.getSelection()?.anchorNode?.textContent).toBe('\u200B')
+    expect(window.getSelection()?.anchorOffset).toBe(0)
     wrapper.unmount()
   })
 
@@ -219,7 +223,32 @@ describe('WysiwygEditor enter flows', () => {
     await editor.trigger('keydown', { key: 'Enter' })
     vi.runAllTimers()
 
-    expect(code.textContent).toBe('const x = 1;\n')
+    expect(code.textContent?.replace(/\u200B/g, '')).toBe('const x = 1;\n')
+    expect(window.getSelection()?.anchorNode?.textContent).toBe('\u200B')
+    expect(window.getSelection()?.anchorOffset).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('selects only the current multiline code block on Ctrl+A', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p>Before</p><pre><code>const x = 1;\nconst y = 2;</code></pre><p>After</p>'
+    const codeText = editor.element.querySelector('pre code')!.firstChild!
+    setCollapsedSelection(codeText, 3)
+
+    await editor.trigger('keydown', { key: 'a', ctrlKey: true })
+
+    const selection = window.getSelection()
+    expect(selection?.toString()).toBe('const x = 1;\nconst y = 2;')
+    expect(editor.element.querySelector('pre code')?.contains(selection?.anchorNode ?? null)).toBe(true)
+    expect(editor.element.textContent).toContain('Before')
+    expect(editor.element.textContent).toContain('After')
     wrapper.unmount()
   })
 

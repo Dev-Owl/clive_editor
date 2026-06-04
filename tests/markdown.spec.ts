@@ -41,6 +41,12 @@ describe('markdown utils', () => {
     expect(markdown).toContain('const x = 1;')
   })
 
+  it('preserves a trailing blank line when serializing fenced code blocks', () => {
+    const markdown = serializeHtml('<pre><code>asdasdsd\n</code></pre>')
+
+    expect(markdown).toContain('```\nasdasdsd\n\n```')
+  })
+
   it('parses fenced code blocks without adding a phantom trailing blank line', () => {
     const html = parseMarkdown('```js\nconst x = 1;\n```')
     const container = document.createElement('div')

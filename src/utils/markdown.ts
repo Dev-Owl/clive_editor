@@ -327,12 +327,9 @@ td.addRule('fencedCodeBlock', {
     }
 
     // Get the raw text content of the code (strip any Shiki highlight spans)
-    const code = codeEl ? (codeEl.textContent || '') : ''
+    const code = codeEl ? (codeEl.textContent || '').replace(/\u200B$/u, '') : ''
 
-    // Remove trailing newline that markdown-it / Shiki often adds
-    const trimmed = code.replace(/\n$/, '')
-
-    return `\n\n\`\`\`${lang}\n${trimmed}\n\`\`\`\n\n`
+    return `\n\n\`\`\`${lang}\n${code}\n\`\`\`\n\n`
   },
 })
 

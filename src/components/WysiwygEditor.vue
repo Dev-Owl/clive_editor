@@ -56,6 +56,7 @@ import TableControls from './TableControls.vue'
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const DEFAULT_MAX_IMAGE_SIZE = 2_097_152 // 2 MB
 const LIST_MARKER_TEXT_RE = /^(\s*)([-+*]|\d+\.)\s+(.*)$/
+const CODE_BLOCK_TRAILING_CARET_SENTINEL = '\u200B'
 
 const props = defineProps<{
   modelValue: string
@@ -449,6 +450,24 @@ function onKeydown(e: KeyboardEvent): void {
 
   const mod = e.ctrlKey || e.metaKey
   const sel = window.getSelection()
+
+  if (mod && e.key.toLocaleLowerCase() === 'a' && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const preEl = anchor instanceof HTMLElement
+      ? anchor.closest('pre')
+      : anchor?.parentElement?.closest('pre')
+
+    if (preEl && editorEl.value?.contains(preEl)) {
+      e.preventDefault()
+      const codeEl = ensureCodeElement(preEl)
+      const range = document.createRange()
+      range.selectNodeContents(codeEl)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      return
+    }
+  }
+
   // ---- Table cell navigation ----
   // Find the active cell.  Use the Range's endContainer (document order) as well
   // as anchorNode, because for right-to-left selections the anchorNode is at
@@ -924,10 +943,10 @@ function onKeydown(e: KeyboardEvent): void {
       const endOffset = getCodeTextOffsetAtBoundary(codeEl, range.endContainer, range.endOffset)
       const selectionStart = Math.min(startOffset, endOffset)
       const selectionEnd = Math.max(startOffset, endOffset)
-      const rawCode = codeEl.textContent || ''
+      const rawCode = getSerializableCodeText(codeEl)
 
-      codeEl.textContent = `${rawCode.slice(0, selectionStart)}\n${rawCode.slice(selectionEnd)}`
-      restoreCursorInCode(codeEl, selectionStart + 1, sel)
+      setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}\n${rawCode.slice(selectionEnd)}`)
+      restoreCursorInCode(codeEl, selectionStart + 1, sel, { preferTrailingBlankLine: true })
       onInput()
       return
     }
@@ -1031,7 +1050,7 @@ function showLangInput(labelEl: HTMLElement): void {
 
       // Re-highlight the code block if a highlight function is provided
       if (props.highlight && newLang) {
-        const rawCode = codeEl.textContent || ''
+        const rawCode = getSerializableCodeText(codeEl)
         const highlighted = props.highlight(rawCode, newLang)
         if (highlighted) {
           // Shiki returns <pre><code>…</code></pre>, extract the inner HTML
@@ -1042,8 +1061,8 @@ function showLangInput(labelEl: HTMLElement): void {
         }
       } else {
         // No highlighting — ensure we show plain text
-        const rawCode = codeEl.textContent || ''
-        codeEl.textContent = rawCode
+        const rawCode = getSerializableCodeText(codeEl)
+        setCodeBlockText(codeEl, rawCode)
       }
     }
 
@@ -1094,7 +1113,7 @@ function rehighlightCurrentBlock(): void {
   const lang = langMatch ? langMatch[1] : ''
   if (!lang) return
 
-  const rawCode = codeEl.textContent || ''
+  const rawCode = getSerializableCodeText(codeEl)
   const highlighted = props.highlight(rawCode, lang)
   if (!highlighted) return
 
@@ -1124,7 +1143,24 @@ function restoreCursorInCode(
   codeEl: HTMLElement,
   caretOffset: number,
   sel: Selection,
+  options?: { preferTrailingBlankLine?: boolean },
 ): void {
+  if (
+    options?.preferTrailingBlankLine &&
+    caretOffset === getSerializableCodeText(codeEl).length &&
+    codeEl.textContent?.endsWith(CODE_BLOCK_TRAILING_CARET_SENTINEL)
+  ) {
+    const trailingSentinel = findTrailingCodeCaretSentinel(codeEl)
+    if (trailingSentinel) {
+      const newRange = document.createRange()
+      newRange.setStart(trailingSentinel, 0)
+      newRange.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
+      return
+    }
+  }
+
   const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
   let remaining = caretOffset
   let textNode: Text | null = null
@@ -1186,6 +1222,35 @@ function ensureCodeElement(preEl: HTMLPreElement): HTMLElement {
   const codeEl = document.createElement('code')
   preEl.appendChild(codeEl)
   return codeEl
+}
+
+function getSerializableCodeText(codeEl: HTMLElement): string {
+  return (codeEl.textContent || '').replace(/\u200B$/, '')
+}
+
+function setCodeBlockText(codeEl: HTMLElement, text: string): void {
+  codeEl.textContent = text.endsWith('\n')
+    ? `${text}${CODE_BLOCK_TRAILING_CARET_SENTINEL}`
+    : text
+}
+
+function findTrailingCodeCaretSentinel(codeEl: HTMLElement): Text | null {
+  const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
+  let lastTextNode: Text | null = null
+
+  while (walker.nextNode()) {
+    lastTextNode = walker.currentNode as Text
+  }
+
+  if (!lastTextNode?.textContent?.endsWith(CODE_BLOCK_TRAILING_CARET_SENTINEL)) {
+    return null
+  }
+
+  const sentinelNode = document.createTextNode(CODE_BLOCK_TRAILING_CARET_SENTINEL)
+  const withoutSentinel = lastTextNode.textContent.slice(0, -CODE_BLOCK_TRAILING_CARET_SENTINEL.length)
+  lastTextNode.textContent = withoutSentinel
+  lastTextNode.parentNode?.insertBefore(sentinelNode, lastTextNode.nextSibling)
+  return sentinelNode
 }
 
 /* ---- Image insert helper ---- */
