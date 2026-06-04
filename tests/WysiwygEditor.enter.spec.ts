@@ -137,6 +137,72 @@ describe('WysiwygEditor enter flows', () => {
     wrapper.unmount()
   })
 
+  it('appends a newline inside code when Enter is pressed at the end of a single-line code block', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    const pre = document.createElement('pre')
+    const code = document.createElement('code')
+    code.textContent = 'const x = 1;'
+    pre.appendChild(code)
+    editor.element.replaceChildren(pre)
+    setCollapsedSelection(pre, pre.childNodes.length)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\n</code></pre>')
+    wrapper.unmount()
+  })
+
+  it('appends a newline inside code when Enter is pressed at the end of a multiline code block', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    const pre = document.createElement('pre')
+    const code = document.createElement('code')
+    code.textContent = 'const x = 1;\nconst y = 2;'
+    pre.appendChild(code)
+    editor.element.replaceChildren(pre)
+    setCollapsedSelection(pre, pre.childNodes.length)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<pre><code>const x = 1;\nconst y = 2;\n</code></pre>')
+    wrapper.unmount()
+  })
+
+  it('adds a newline on the first Enter for a code block rendered from markdown', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '```js\nconst x = 1;\n```',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    const code = editor.element.querySelector('pre code')!
+    const text = code.lastChild!
+    setCollapsedSelection(text, text.textContent?.length ?? 0)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(code.textContent).toBe('const x = 1;\n')
+    wrapper.unmount()
+  })
+
   it('starts the next list item without carrying inline formatting forward', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

@@ -41,6 +41,14 @@ describe('markdown utils', () => {
     expect(markdown).toContain('const x = 1;')
   })
 
+  it('parses fenced code blocks without adding a phantom trailing blank line', () => {
+    const html = parseMarkdown('```js\nconst x = 1;\n```')
+    const container = document.createElement('div')
+    container.innerHTML = html
+
+    expect(container.querySelector('pre code')?.textContent).toBe('const x = 1;')
+  })
+
   it('round-trips resized images through markdown metadata', () => {
     const html = '<p><img src="https://example.com/image.png" alt="Preview" data-ce-width="75%" style="width: 75%; height: auto;"></p>'
     const markdown = serializeHtml(html)

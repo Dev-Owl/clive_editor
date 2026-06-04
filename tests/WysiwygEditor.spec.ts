@@ -104,6 +104,28 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('moves above the first code block when pressing ArrowUp on its first line', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><code>const x = 1;\nconst y = 2;</code></pre>'
+    const text = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(text, 5)
+
+    await editor.trigger('keydown', { key: 'ArrowUp' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p><br></p><pre><code>const x = 1;\nconst y = 2;</code></pre>')
+    expect(window.getSelection()?.anchorNode).toBe(editor.element.querySelector('p'))
+    expect(window.getSelection()?.anchorOffset).toBe(0)
+    wrapper.unmount()
+  })
+
   it('exits a root-level empty list item into a paragraph on Enter', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

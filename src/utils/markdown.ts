@@ -54,7 +54,10 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
     const token = tokens[idx]
     const rawLang = (token.info || '').trim()
     const lang = rawLang || ''
-    const code = token.content
+    // markdown-it includes the syntactic trailing newline before the closing
+    // fence in token.content. Trim exactly one so visual mode does not start
+    // with a phantom empty line at the end of the code block.
+    const code = token.content.replace(/\n$/, '')
 
     // Language label HTML (positioned via CSS)
     const displayLang = lang || 'plain text'

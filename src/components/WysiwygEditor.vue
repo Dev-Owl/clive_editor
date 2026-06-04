@@ -613,6 +613,20 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  // ---- ArrowUp on the first line of the first code block → move above it ----
+  if (e.key === 'ArrowUp' && !mod && !e.shiftKey && sel) {
+    const insertionAnchor = findCodeBlockArrowUpExitTarget(sel)
+    if (insertionAnchor) {
+      e.preventDefault()
+      const p = document.createElement('p')
+      p.innerHTML = '<br>'
+      insertionAnchor.parentNode?.insertBefore(p, insertionAnchor)
+      placeCursorAtStart(sel, p)
+      onInput()
+      return
+    }
+  }
+
   // ---- Space at line start: auto-create lists and headings ----
   // Detects markdown-style shortcuts: `* `, `- `, `1. `, `# `, `## `, `### `
   if (e.key === ' ' && !mod && !e.shiftKey && tryApplyLineStartShortcut(sel, false)) {
@@ -924,15 +938,16 @@ function onKeydown(e: KeyboardEvent): void {
       : anchor?.parentElement?.closest('pre')
     if (preEl && editorEl.value?.contains(preEl)) {
       e.preventDefault()
+      const codeEl = ensureCodeElement(preEl)
       const range = sel.getRangeAt(0)
-      range.deleteContents()
-      // Insert a plain newline character (preserves <pre> formatting)
-      const nl = document.createTextNode('\n')
-      range.insertNode(nl)
-      range.setStartAfter(nl)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
+      const startOffset = getCodeTextOffsetAtBoundary(codeEl, range.startContainer, range.startOffset)
+      const endOffset = getCodeTextOffsetAtBoundary(codeEl, range.endContainer, range.endOffset)
+      const selectionStart = Math.min(startOffset, endOffset)
+      const selectionEnd = Math.max(startOffset, endOffset)
+      const rawCode = codeEl.textContent || ''
+
+      codeEl.textContent = `${rawCode.slice(0, selectionStart)}\n${rawCode.slice(selectionEnd)}`
+      restoreCursorInCode(codeEl, selectionStart + 1, sel)
       onInput()
       return
     }
@@ -1150,6 +1165,47 @@ function restoreCursorInCode(
     sel.removeAllRanges()
     sel.addRange(newRange)
   }
+}
+
+function getCodeTextOffsetAtBoundary(codeEl: HTMLElement, container: Node, offset: number): number {
+  const codeLength = codeEl.textContent?.length ?? 0
+  const boundaryRange = document.createRange()
+  boundaryRange.setStart(container, offset)
+  boundaryRange.collapse(true)
+
+  const codeStart = document.createRange()
+  codeStart.selectNodeContents(codeEl)
+  codeStart.collapse(true)
+
+  const codeEnd = document.createRange()
+  codeEnd.selectNodeContents(codeEl)
+  codeEnd.collapse(false)
+
+  if (boundaryRange.compareBoundaryPoints(Range.START_TO_START, codeStart) <= 0) {
+    return 0
+  }
+
+  if (boundaryRange.compareBoundaryPoints(Range.START_TO_START, codeEnd) >= 0) {
+    return codeLength
+  }
+
+  if (container !== codeEl && !codeEl.contains(container)) {
+    return codeLength
+  }
+
+  const caretRange = document.createRange()
+  caretRange.selectNodeContents(codeEl)
+  caretRange.setEnd(container, offset)
+  return caretRange.toString().length
+}
+
+function ensureCodeElement(preEl: HTMLPreElement): HTMLElement {
+  const existingCodeEl = preEl.querySelector('code')
+  if (existingCodeEl) return existingCodeEl
+
+  const codeEl = document.createElement('code')
+  preEl.appendChild(codeEl)
+  return codeEl
 }
 
 /* ---- Image insert helper ---- */
@@ -1621,6 +1677,45 @@ function isCollapsedSelectionAtListItemContentEnd(selection: Selection, listItem
 
   const contentNodes = getListItemContentNodes(listItem)
   return contentNodes.length === 0
+}
+
+function findCodeBlockArrowUpExitTarget(selection: Selection): Node | null {
+  if (!editorEl.value || !selection.isCollapsed || selection.rangeCount === 0) return null
+
+  const anchor = selection.anchorNode
+  const preEl = anchor instanceof HTMLElement
+    ? anchor.closest('pre')
+    : anchor?.parentElement?.closest('pre')
+  const codeEl = anchor instanceof HTMLElement
+    ? anchor.closest('code')
+    : anchor?.parentElement?.closest('code')
+
+  if (!preEl || !codeEl || !editorEl.value.contains(preEl)) return null
+
+  const insertionAnchor = findEditorRootAncestor(preEl)
+  if (!isFirstMeaningfulEditorChild(insertionAnchor)) return null
+
+  const range = selection.getRangeAt(0)
+  const textBeforeCursor = document.createRange()
+  textBeforeCursor.setStart(codeEl, 0)
+  textBeforeCursor.setEnd(range.startContainer, range.startOffset)
+
+  return textBeforeCursor.toString().includes('\n') ? null : insertionAnchor
+}
+
+function isFirstMeaningfulEditorChild(node: Node): boolean {
+  let sibling = node.previousSibling
+
+  while (sibling) {
+    if (sibling.nodeType === Node.TEXT_NODE && !sibling.textContent?.trim()) {
+      sibling = sibling.previousSibling
+      continue
+    }
+
+    return false
+  }
+
+  return true
 }
 
 /**
