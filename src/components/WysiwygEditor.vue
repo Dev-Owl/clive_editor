@@ -392,6 +392,9 @@ function onInput(event?: Event): void {
     event.preventDefault?.()
   }
 
+  normalizeEmptyInlineCode(sel)
+  normalizePresentationalInlineArtifacts()
+
   emit('input')
 
   // Debounced re-highlight of the current code block
@@ -1758,5 +1761,99 @@ function normalizeNestedBlocks(): void {
     // Remove the now-empty original <p>
     p.remove()
   }
+}
+
+function normalizeEmptyInlineCode(sel: Selection | null): void {
+  if (!editorEl.value) return
+
+  let shouldResetEditor = false
+
+  for (const codeEl of Array.from(editorEl.value.querySelectorAll('code'))) {
+    if (codeEl.closest('pre')) continue
+
+    const normalizedText = (codeEl.textContent || '')
+      .replace(/[\u200B\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ')
+      .trim()
+    const hasMeaningfulChild = Array.from(codeEl.children).some(
+      (child) => child.tagName !== 'BR',
+    )
+
+    if (normalizedText || hasMeaningfulChild) continue
+
+    const blockParent = findClosestInlineCodeBlockParent(codeEl)
+    const shouldRestoreSelection = !!sel && codeEl.contains(sel.anchorNode)
+
+    codeEl.remove()
+
+    if (blockParent && !hasRenderableContent(blockParent)) {
+      blockParent.innerHTML = '<br>'
+      if (shouldRestoreSelection && sel) {
+        placeCursorAtStart(sel, blockParent)
+      }
+    }
+
+    if (shouldRestoreSelection) {
+      shouldResetEditor = true
+    }
+  }
+
+  if (shouldResetEditor && !hasRenderableContent(editorEl.value)) {
+    editorEl.value.innerHTML = '<p><br></p>'
+    if (sel) {
+      placeCursorAtStart(sel, editorEl.value.firstElementChild as HTMLElement)
+    }
+  }
+}
+
+function normalizePresentationalInlineArtifacts(): void {
+  if (!editorEl.value) return
+
+  const wrappers = Array.from(editorEl.value.querySelectorAll('font, span')) as HTMLElement[]
+
+  for (const el of wrappers) {
+    if (el.closest('pre')) continue
+    if (el.classList.contains('ce-code-lang') || el.classList.contains('ce-code-lang-input')) continue
+
+    const shouldUnwrap = el.tagName === 'FONT'
+      || (el.tagName === 'SPAN' && el.hasAttribute('style'))
+
+    if (!shouldUnwrap) continue
+
+    unwrapElementPreservingChildren(el)
+  }
+}
+
+function findClosestInlineCodeBlockParent(codeEl: HTMLElement): HTMLElement | null {
+  let blockParent: HTMLElement | null = codeEl.parentElement
+
+  while (blockParent && blockParent !== editorEl.value) {
+    if (/^(P|DIV|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/.test(blockParent.tagName)) {
+      return blockParent
+    }
+    blockParent = blockParent.parentElement
+  }
+
+  return null
+}
+
+function hasRenderableContent(el: HTMLElement): boolean {
+  const normalizedText = (el.textContent || '')
+    .replace(/[\u200B\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+
+  return !!normalizedText || !!el.querySelector('img, br')
+}
+
+function unwrapElementPreservingChildren(el: HTMLElement): void {
+  const parent = el.parentNode
+  if (!parent) return
+
+  while (el.firstChild) {
+    parent.insertBefore(el.firstChild, el)
+  }
+
+  el.remove()
 }
 </script>

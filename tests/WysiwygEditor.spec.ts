@@ -126,6 +126,46 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('removes an empty inline code wrapper after the editor is cleared', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p><code><br></code></p>'
+    const code = editor.element.querySelector('code')!
+    setCollapsedSelection(code, 0)
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p><br></p>')
+    expect(window.getSelection()?.anchorNode).toBe(editor.element.querySelector('p'))
+    expect(window.getSelection()?.anchorOffset).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('unwraps browser-generated inline code styling artifacts outside pre blocks', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p><font color="#e11d48" face="SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace"><span style="font-size: 14.4px; background-color: rgb(243, 244, 246);">dsadas</span></font></p>'
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p>dsadas</p>')
+    wrapper.unmount()
+  })
+
   it('exits a root-level empty list item into a paragraph on Enter', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
