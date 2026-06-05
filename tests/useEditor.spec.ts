@@ -100,4 +100,27 @@ describe('useEditor list behavior', () => {
 
     expect(el.innerHTML).toBe('<ul><li>Progress</li></ul>')
   })
+
+  it('does not report inline code as active inside a code block', () => {
+    const el = createEditor('<pre><code>const x = 1;</code></pre>')
+    const editor = useEditor(ref(el))
+    const codeText = el.querySelector('code')!.firstChild!
+    setCollapsedSelection(codeText, 3)
+
+    editor.refreshActiveState()
+
+    expect(editor.isActive('pre')).toBe(true)
+    expect(editor.isActive('code')).toBe(false)
+  })
+
+  it('does not apply inline code formatting inside a code block', () => {
+    const el = createEditor('<pre><code>const x = 1;</code></pre>')
+    const editor = useEditor(ref(el))
+    const codeText = el.querySelector('code')!.firstChild!
+    setCollapsedSelection(codeText, 3)
+
+    editor.codeInline()
+
+    expect(el.innerHTML).toBe('<pre><code>const x = 1;</code></pre>')
+  })
 })
