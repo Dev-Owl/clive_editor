@@ -252,6 +252,30 @@ describe('WysiwygEditor enter flows', () => {
     wrapper.unmount()
   })
 
+  it('replaces the selected multiline code block contents when typing after Ctrl+A', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>line 1\nline 2</code></pre>'
+    const codeText = editor.element.querySelector('pre code')!.firstChild!
+    setCollapsedSelection(codeText, 2)
+
+    await editor.trigger('keydown', { key: 'a', ctrlKey: true })
+    await editor.trigger('keydown', { key: 'x' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>x</code></pre>')
+
+    const updates = wrapper.emitted('update:modelValue')
+    expect(updates?.at(-1)?.[0]).toContain('```\nx\n```')
+    wrapper.unmount()
+  })
+
   it('starts the next list item without carrying inline formatting forward', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

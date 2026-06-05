@@ -468,6 +468,67 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
+  if (sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const preEl = anchor instanceof HTMLElement
+      ? anchor.closest('pre')
+      : anchor?.parentElement?.closest('pre')
+
+    if (preEl && editorEl.value?.contains(preEl)) {
+      const codeEl = ensureCodeElement(preEl)
+      const range = sel.getRangeAt(0)
+      const startOffset = getCodeTextOffsetAtBoundary(codeEl, range.startContainer, range.startOffset)
+      const endOffset = getCodeTextOffsetAtBoundary(codeEl, range.endContainer, range.endOffset)
+      const selectionStart = Math.min(startOffset, endOffset)
+      const selectionEnd = Math.max(startOffset, endOffset)
+      const rawCode = getSerializableCodeText(codeEl)
+
+      if (e.key === 'Backspace') {
+        if (selectionStart !== selectionEnd) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+
+        if (selectionStart > 0) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart - 1)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart - 1, sel)
+          onInput()
+          return
+        }
+      }
+
+      if (e.key === 'Delete') {
+        if (selectionStart !== selectionEnd) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+
+        if (selectionStart < rawCode.length) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionStart + 1)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+      }
+
+      if (e.key.length === 1 && !mod && !e.altKey) {
+        e.preventDefault()
+        setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${e.key}${rawCode.slice(selectionEnd)}`)
+        restoreCursorInCode(codeEl, selectionStart + e.key.length, sel)
+        onInput()
+        return
+      }
+    }
+  }
+
   // ---- Table cell navigation ----
   // Find the active cell.  Use the Range's endContainer (document order) as well
   // as anchorNode, because for right-to-left selections the anchorNode is at
