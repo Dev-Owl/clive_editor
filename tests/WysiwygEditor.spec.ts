@@ -166,6 +166,38 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('does not route language input keystrokes into the code block', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>const x = 1;</code></pre>'
+
+    const codeText = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(codeText, 2)
+
+    const label = editor.element.querySelector('.ce-code-lang') as HTMLElement
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    const input = editor.element.querySelector('.ce-code-lang-input') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+
+    input!.value = 'j'
+    input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
+    input!.dispatchEvent(new Event('input', { bubbles: true }))
+    input!.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true }))
+    vi.runAllTimers()
+
+    expect(editor.element.querySelector('code')?.textContent).toBe('const x = 1;')
+    expect(input!.value).toBe('j')
+    expect(document.activeElement).toBe(input)
+    wrapper.unmount()
+  })
+
   it('exits a root-level empty list item into a paragraph on Enter', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

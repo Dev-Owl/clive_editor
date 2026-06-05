@@ -381,6 +381,14 @@ function buildSafeCellSelectionRange(
 function onInput(event?: Event): void {
   if (isSyncing) return
 
+  if (
+    event?.target instanceof HTMLInputElement
+    || event?.target instanceof HTMLTextAreaElement
+    || event?.target instanceof HTMLSelectElement
+  ) {
+    return
+  }
+
   if (selectedImage.value && !selectedImage.value.isConnected) {
     clearImageSelection()
   }
@@ -445,6 +453,14 @@ function onInput(event?: Event): void {
 function onKeydown(e: KeyboardEvent): void {
   if (props.disabled) {
     e.preventDefault()
+    return
+  }
+
+  if (
+    e.target instanceof HTMLInputElement
+    || e.target instanceof HTMLTextAreaElement
+    || e.target instanceof HTMLSelectElement
+  ) {
     return
   }
 
@@ -1090,6 +1106,17 @@ function showLangInput(labelEl: HTMLElement): void {
   labelEl.style.visibility = 'hidden'
   labelEl.insertAdjacentElement('afterend', input)
   activeLangInput = input
+
+  const stopEditorEventPropagation = (ev: Event) => {
+    ev.stopPropagation()
+  }
+
+  input.addEventListener('keydown', stopEditorEventPropagation)
+  input.addEventListener('keyup', stopEditorEventPropagation)
+  input.addEventListener('input', stopEditorEventPropagation)
+  input.addEventListener('mousedown', stopEditorEventPropagation)
+  input.addEventListener('mouseup', stopEditorEventPropagation)
+  input.addEventListener('click', stopEditorEventPropagation)
 
   input.focus()
   input.select()
