@@ -4,9 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## 0.1.19
 
+TLDR: Bug fix release focusing on code elements
+
 ### Fixed
 
 - Blocked browser-native `Ctrl+U` underline in the WYSIWYG editor since markdown has no underline syntax and the unmanaged `<u>` tags could not round-trip between modes.
+- Inline code elements bleed into the next line on enter
+- Multi-line code elements as first element in a document do not allow the user to place content above them in Visual mode
+- Multi-line code elements show also single line code active in Visual mode
+- Multi-line code doesnt handle line breaks/enter press correctly and requires pressing enter twice
+- CTRL + a in a multi-line code block selects content out of its scope
+- NPM Audit fix applied
 
 ## 0.1.18
 
