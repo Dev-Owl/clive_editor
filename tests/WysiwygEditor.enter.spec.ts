@@ -272,7 +272,8 @@ describe('WysiwygEditor enter flows', () => {
     expect(editor.element.innerHTML).toBe('<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>x</code></pre>')
 
     const updates = wrapper.emitted('update:modelValue')
-    expect(updates?.at(-1)?.[0]).toContain('```\nx\n```')
+    const last = updates?.[updates.length - 1]
+    expect(last?.[0]).toContain('```\nx\n```')
     wrapper.unmount()
   })
 
