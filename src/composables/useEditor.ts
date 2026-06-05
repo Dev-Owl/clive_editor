@@ -29,6 +29,9 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     for (const tag of tags) {
       if (isInsideTag(tag)) newSet.add(tag)
     }
+    if (newSet.has('PRE')) {
+      newSet.delete('CODE')
+    }
     activeTags.value = newSet
   }
 
@@ -58,6 +61,7 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
 
   function codeInline(): void {
     if (isSelectionCrossCell()) return
+    if (isInsideTag('pre')) return
     wrapSelection('code')
     refreshActiveState()
   }

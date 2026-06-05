@@ -192,7 +192,7 @@ const commandRegistry: Record<ToolbarAction, CommandDefinition> = {
       id: 'codeInline',
       label: 'Inline Code',
       icon: Code,
-      active: (ctx) => ctx.isActive('code'),
+      active: (ctx) => ctx.isActive('code') && !ctx.isActive('pre'),
     },
     markdown: { kind: 'wrap', before: '`', after: '`' },
     wysiwyg: { kind: 'method', name: 'codeInline' },

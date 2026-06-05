@@ -1,54 +1,32 @@
 <template>
   <div class="ce-wysiwyg-wrap">
     <TableControls :editor-el="editorEl" :disabled="disabled" @change="onInput" />
-    <div
-      v-if="selectedImage"
-      class="ce-image-controls"
-      :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }"
-      @mousedown.stop
-      @click.stop
-    >
+    <div v-if="selectedImage" class="ce-image-controls"
+      :style="{ top: `${imageControlsPosition.top}px`, left: `${imageControlsPosition.left}px` }" @mousedown.stop
+      @click.stop>
       <div class="ce-image-controls__group">
-        <button
-          v-for="preset in IMAGE_SIZE_PRESETS"
-          :key="preset"
-          type="button"
-          class="ce-image-controls__btn"
+        <button v-for="preset in IMAGE_SIZE_PRESETS" :key="preset" type="button" class="ce-image-controls__btn"
           :class="{ 'ce-image-controls__btn--active': currentImageWidth === preset }"
-          :title="`Resize image to ${preset}`"
-          @click="applyPresetImageWidth(preset)"
-        >
+          :title="`Resize image to ${preset}`" @click="applyPresetImageWidth(preset)">
           {{ preset }}
         </button>
-        <button
-          type="button"
-          class="ce-image-controls__btn"
-          :class="{ 'ce-image-controls__btn--active': showCustomImageWidth }"
-          title="Custom image size"
-          @click="toggleCustomImageWidth"
-        >
+        <button type="button" class="ce-image-controls__btn"
+          :class="{ 'ce-image-controls__btn--active': showCustomImageWidth }" title="Custom image size"
+          @click="toggleCustomImageWidth">
           Custom
         </button>
       </div>
       <form v-if="showCustomImageWidth" class="ce-image-controls__custom" @submit.prevent="applyCustomImageWidth">
-        <input
-          ref="customImageWidthInput"
-          v-model="customImageWidth"
-          type="number"
-          min="1"
-          max="100"
-          step="1"
-          class="ce-image-controls__input"
-          aria-label="Custom image width percentage"
-        >
+        <input ref="customImageWidthInput" v-model="customImageWidth" type="number" min="1" max="100" step="1"
+          class="ce-image-controls__input" aria-label="Custom image width percentage">
         <span class="ce-image-controls__suffix">%</span>
         <button type="submit" class="ce-image-controls__btn" title="Apply custom image size">Apply</button>
       </form>
     </div>
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
-      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true" @input="onInput($event)"
-      @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop" @dragover.prevent @click="onClick"
-      @mouseup="onSelectionChange" />
+      :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true"
+      @input="onInput($event)" @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop"
+      @dragover.prevent @click="onClick" @mouseup="onSelectionChange" />
   </div>
 </template>
 
@@ -78,6 +56,7 @@ import TableControls from './TableControls.vue'
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const DEFAULT_MAX_IMAGE_SIZE = 2_097_152 // 2 MB
 const LIST_MARKER_TEXT_RE = /^(\s*)([-+*]|\d+\.)\s+(.*)$/
+const CODE_BLOCK_TRAILING_CARET_SENTINEL = '\u200B'
 
 const props = defineProps<{
   modelValue: string
@@ -402,6 +381,14 @@ function buildSafeCellSelectionRange(
 function onInput(event?: Event): void {
   if (isSyncing) return
 
+  if (
+    event?.target instanceof HTMLInputElement
+    || event?.target instanceof HTMLTextAreaElement
+    || event?.target instanceof HTMLSelectElement
+  ) {
+    return
+  }
+
   if (selectedImage.value && !selectedImage.value.isConnected) {
     clearImageSelection()
   }
@@ -413,6 +400,9 @@ function onInput(event?: Event): void {
   if (event && tryApplyLineStartShortcut(sel, true)) {
     event.preventDefault?.()
   }
+
+  normalizeEmptyInlineCode(sel)
+  normalizePresentationalInlineArtifacts()
 
   emit('input')
 
@@ -466,8 +456,95 @@ function onKeydown(e: KeyboardEvent): void {
     return
   }
 
+  if (
+    e.target instanceof HTMLInputElement
+    || e.target instanceof HTMLTextAreaElement
+    || e.target instanceof HTMLSelectElement
+  ) {
+    return
+  }
+
   const mod = e.ctrlKey || e.metaKey
   const sel = window.getSelection()
+
+  if (mod && e.key.toLocaleLowerCase() === 'a' && sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const preEl = anchor instanceof HTMLElement
+      ? anchor.closest('pre')
+      : anchor?.parentElement?.closest('pre')
+
+    if (preEl && editorEl.value?.contains(preEl)) {
+      e.preventDefault()
+      const codeEl = ensureCodeElement(preEl)
+      const range = document.createRange()
+      range.selectNodeContents(codeEl)
+      sel.removeAllRanges()
+      sel.addRange(range)
+      return
+    }
+  }
+
+  if (sel && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const preEl = anchor instanceof HTMLElement
+      ? anchor.closest('pre')
+      : anchor?.parentElement?.closest('pre')
+
+    if (preEl && editorEl.value?.contains(preEl)) {
+      const codeEl = ensureCodeElement(preEl)
+      const range = sel.getRangeAt(0)
+      const startOffset = getCodeTextOffsetAtBoundary(codeEl, range.startContainer, range.startOffset)
+      const endOffset = getCodeTextOffsetAtBoundary(codeEl, range.endContainer, range.endOffset)
+      const selectionStart = Math.min(startOffset, endOffset)
+      const selectionEnd = Math.max(startOffset, endOffset)
+      const rawCode = getSerializableCodeText(codeEl)
+
+      if (e.key === 'Backspace') {
+        if (selectionStart !== selectionEnd) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+
+        if (selectionStart > 0) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart - 1)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart - 1, sel)
+          onInput()
+          return
+        }
+      }
+
+      if (e.key === 'Delete') {
+        if (selectionStart !== selectionEnd) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionEnd)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+
+        if (selectionStart < rawCode.length) {
+          e.preventDefault()
+          setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${rawCode.slice(selectionStart + 1)}`)
+          restoreCursorInCode(codeEl, selectionStart, sel)
+          onInput()
+          return
+        }
+      }
+
+      if (e.key.length === 1 && !mod && !e.altKey) {
+        e.preventDefault()
+        setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}${e.key}${rawCode.slice(selectionEnd)}`)
+        restoreCursorInCode(codeEl, selectionStart + e.key.length, sel)
+        onInput()
+        return
+      }
+    }
+  }
+
   // ---- Table cell navigation ----
   // Find the active cell.  Use the Range's endContainer (document order) as well
   // as anchorNode, because for right-to-left selections the anchorNode is at
@@ -610,6 +687,20 @@ function onKeydown(e: KeyboardEvent): void {
         onInput()
         return
       }
+    }
+  }
+
+  // ---- ArrowUp on the first line of the first code block → move above it ----
+  if (e.key === 'ArrowUp' && !mod && !e.shiftKey && sel) {
+    const insertionAnchor = findCodeBlockArrowUpExitTarget(sel)
+    if (insertionAnchor) {
+      e.preventDefault()
+      const p = document.createElement('p')
+      p.innerHTML = '<br>'
+      insertionAnchor.parentNode?.insertBefore(p, insertionAnchor)
+      placeCursorAtStart(sel, p)
+      onInput()
+      return
     }
   }
 
@@ -896,16 +987,15 @@ function onKeydown(e: KeyboardEvent): void {
         sel.removeAllRanges()
         sel.addRange(newRange)
       } else {
-        // Code is inside a proper block — move cursor out of the <code>
-        // and insert a line break so new text is unstyled.
+        // Code is inside a proper block — split to a sibling paragraph so the
+        // inline code remains isolated in its original block.
+        const insertionAnchor = findEditorRootAncestor(blockParent)
+        const newP = document.createElement('p')
+        newP.innerHTML = '<br>'
+        insertionAnchor.parentNode?.insertBefore(newP, insertionAnchor.nextSibling)
+
         const range = document.createRange()
-        range.setStartAfter(codeEl)
-        range.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(range)
-        const br = document.createElement('br')
-        range.insertNode(br)
-        range.setStartAfter(br)
+        range.selectNodeContents(newP)
         range.collapse(true)
         sel.removeAllRanges()
         sel.addRange(range)
@@ -924,15 +1014,16 @@ function onKeydown(e: KeyboardEvent): void {
       : anchor?.parentElement?.closest('pre')
     if (preEl && editorEl.value?.contains(preEl)) {
       e.preventDefault()
+      const codeEl = ensureCodeElement(preEl)
       const range = sel.getRangeAt(0)
-      range.deleteContents()
-      // Insert a plain newline character (preserves <pre> formatting)
-      const nl = document.createTextNode('\n')
-      range.insertNode(nl)
-      range.setStartAfter(nl)
-      range.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(range)
+      const startOffset = getCodeTextOffsetAtBoundary(codeEl, range.startContainer, range.startOffset)
+      const endOffset = getCodeTextOffsetAtBoundary(codeEl, range.endContainer, range.endOffset)
+      const selectionStart = Math.min(startOffset, endOffset)
+      const selectionEnd = Math.max(startOffset, endOffset)
+      const rawCode = getSerializableCodeText(codeEl)
+
+      setCodeBlockText(codeEl, `${rawCode.slice(0, selectionStart)}\n${rawCode.slice(selectionEnd)}`)
+      restoreCursorInCode(codeEl, selectionStart + 1, sel, { preferTrailingBlankLine: true })
       onInput()
       return
     }
@@ -1016,6 +1107,17 @@ function showLangInput(labelEl: HTMLElement): void {
   labelEl.insertAdjacentElement('afterend', input)
   activeLangInput = input
 
+  const stopEditorEventPropagation = (ev: Event) => {
+    ev.stopPropagation()
+  }
+
+  input.addEventListener('keydown', stopEditorEventPropagation)
+  input.addEventListener('keyup', stopEditorEventPropagation)
+  input.addEventListener('input', stopEditorEventPropagation)
+  input.addEventListener('mousedown', stopEditorEventPropagation)
+  input.addEventListener('mouseup', stopEditorEventPropagation)
+  input.addEventListener('click', stopEditorEventPropagation)
+
   input.focus()
   input.select()
 
@@ -1036,7 +1138,7 @@ function showLangInput(labelEl: HTMLElement): void {
 
       // Re-highlight the code block if a highlight function is provided
       if (props.highlight && newLang) {
-        const rawCode = codeEl.textContent || ''
+        const rawCode = getSerializableCodeText(codeEl)
         const highlighted = props.highlight(rawCode, newLang)
         if (highlighted) {
           // Shiki returns <pre><code>…</code></pre>, extract the inner HTML
@@ -1047,8 +1149,8 @@ function showLangInput(labelEl: HTMLElement): void {
         }
       } else {
         // No highlighting — ensure we show plain text
-        const rawCode = codeEl.textContent || ''
-        codeEl.textContent = rawCode
+        const rawCode = getSerializableCodeText(codeEl)
+        setCodeBlockText(codeEl, rawCode)
       }
     }
 
@@ -1099,7 +1201,7 @@ function rehighlightCurrentBlock(): void {
   const lang = langMatch ? langMatch[1] : ''
   if (!lang) return
 
-  const rawCode = codeEl.textContent || ''
+  const rawCode = getSerializableCodeText(codeEl)
   const highlighted = props.highlight(rawCode, lang)
   if (!highlighted) return
 
@@ -1129,7 +1231,24 @@ function restoreCursorInCode(
   codeEl: HTMLElement,
   caretOffset: number,
   sel: Selection,
+  options?: { preferTrailingBlankLine?: boolean },
 ): void {
+  if (
+    options?.preferTrailingBlankLine &&
+    caretOffset === getSerializableCodeText(codeEl).length &&
+    codeEl.textContent?.endsWith(CODE_BLOCK_TRAILING_CARET_SENTINEL)
+  ) {
+    const trailingSentinel = findTrailingCodeCaretSentinel(codeEl)
+    if (trailingSentinel) {
+      const newRange = document.createRange()
+      newRange.setStart(trailingSentinel, 0)
+      newRange.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(newRange)
+      return
+    }
+  }
+
   const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
   let remaining = caretOffset
   let textNode: Text | null = null
@@ -1150,6 +1269,76 @@ function restoreCursorInCode(
     sel.removeAllRanges()
     sel.addRange(newRange)
   }
+}
+
+function getCodeTextOffsetAtBoundary(codeEl: HTMLElement, container: Node, offset: number): number {
+  const codeLength = codeEl.textContent?.length ?? 0
+  const boundaryRange = document.createRange()
+  boundaryRange.setStart(container, offset)
+  boundaryRange.collapse(true)
+
+  const codeStart = document.createRange()
+  codeStart.selectNodeContents(codeEl)
+  codeStart.collapse(true)
+
+  const codeEnd = document.createRange()
+  codeEnd.selectNodeContents(codeEl)
+  codeEnd.collapse(false)
+
+  if (boundaryRange.compareBoundaryPoints(Range.START_TO_START, codeStart) <= 0) {
+    return 0
+  }
+
+  if (boundaryRange.compareBoundaryPoints(Range.START_TO_START, codeEnd) >= 0) {
+    return codeLength
+  }
+
+  if (container !== codeEl && !codeEl.contains(container)) {
+    return codeLength
+  }
+
+  const caretRange = document.createRange()
+  caretRange.selectNodeContents(codeEl)
+  caretRange.setEnd(container, offset)
+  return caretRange.toString().length
+}
+
+function ensureCodeElement(preEl: HTMLPreElement): HTMLElement {
+  const existingCodeEl = preEl.querySelector('code')
+  if (existingCodeEl) return existingCodeEl
+
+  const codeEl = document.createElement('code')
+  preEl.appendChild(codeEl)
+  return codeEl
+}
+
+function getSerializableCodeText(codeEl: HTMLElement): string {
+  return (codeEl.textContent || '').replace(/\u200B$/, '')
+}
+
+function setCodeBlockText(codeEl: HTMLElement, text: string): void {
+  codeEl.textContent = text.endsWith('\n')
+    ? `${text}${CODE_BLOCK_TRAILING_CARET_SENTINEL}`
+    : text
+}
+
+function findTrailingCodeCaretSentinel(codeEl: HTMLElement): Text | null {
+  const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
+  let lastTextNode: Text | null = null
+
+  while (walker.nextNode()) {
+    lastTextNode = walker.currentNode as Text
+  }
+
+  if (!lastTextNode?.textContent?.endsWith(CODE_BLOCK_TRAILING_CARET_SENTINEL)) {
+    return null
+  }
+
+  const sentinelNode = document.createTextNode(CODE_BLOCK_TRAILING_CARET_SENTINEL)
+  const withoutSentinel = lastTextNode.textContent.slice(0, -CODE_BLOCK_TRAILING_CARET_SENTINEL.length)
+  lastTextNode.textContent = withoutSentinel
+  lastTextNode.parentNode?.insertBefore(sentinelNode, lastTextNode.nextSibling)
+  return sentinelNode
 }
 
 /* ---- Image insert helper ---- */
@@ -1623,6 +1812,45 @@ function isCollapsedSelectionAtListItemContentEnd(selection: Selection, listItem
   return contentNodes.length === 0
 }
 
+function findCodeBlockArrowUpExitTarget(selection: Selection): Node | null {
+  if (!editorEl.value || !selection.isCollapsed || selection.rangeCount === 0) return null
+
+  const anchor = selection.anchorNode
+  const preEl = anchor instanceof HTMLElement
+    ? anchor.closest('pre')
+    : anchor?.parentElement?.closest('pre')
+  const codeEl = anchor instanceof HTMLElement
+    ? anchor.closest('code')
+    : anchor?.parentElement?.closest('code')
+
+  if (!preEl || !codeEl || !editorEl.value.contains(preEl)) return null
+
+  const insertionAnchor = findEditorRootAncestor(preEl)
+  if (!isFirstMeaningfulEditorChild(insertionAnchor)) return null
+
+  const range = selection.getRangeAt(0)
+  const textBeforeCursor = document.createRange()
+  textBeforeCursor.setStart(codeEl, 0)
+  textBeforeCursor.setEnd(range.startContainer, range.startOffset)
+
+  return textBeforeCursor.toString().includes('\n') ? null : insertionAnchor
+}
+
+function isFirstMeaningfulEditorChild(node: Node): boolean {
+  let sibling = node.previousSibling
+
+  while (sibling) {
+    if (sibling.nodeType === Node.TEXT_NODE && !sibling.textContent?.trim()) {
+      sibling = sibling.previousSibling
+      continue
+    }
+
+    return false
+  }
+
+  return true
+}
+
 /**
  * Walk from `node` up to the direct child of the editor root.
  * Returns that top-level ancestor, which is where new sibling
@@ -1686,5 +1914,99 @@ function normalizeNestedBlocks(): void {
     // Remove the now-empty original <p>
     p.remove()
   }
+}
+
+function normalizeEmptyInlineCode(sel: Selection | null): void {
+  if (!editorEl.value) return
+
+  let shouldResetEditor = false
+
+  for (const codeEl of Array.from(editorEl.value.querySelectorAll('code'))) {
+    if (codeEl.closest('pre')) continue
+
+    const normalizedText = (codeEl.textContent || '')
+      .replace(/[\u200B\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ')
+      .trim()
+    const hasMeaningfulChild = Array.from(codeEl.children).some(
+      (child) => child.tagName !== 'BR',
+    )
+
+    if (normalizedText || hasMeaningfulChild) continue
+
+    const blockParent = findClosestInlineCodeBlockParent(codeEl)
+    const shouldRestoreSelection = !!sel && codeEl.contains(sel.anchorNode)
+
+    codeEl.remove()
+
+    if (blockParent && !hasRenderableContent(blockParent)) {
+      blockParent.innerHTML = '<br>'
+      if (shouldRestoreSelection && sel) {
+        placeCursorAtStart(sel, blockParent)
+      }
+    }
+
+    if (shouldRestoreSelection) {
+      shouldResetEditor = true
+    }
+  }
+
+  if (shouldResetEditor && !hasRenderableContent(editorEl.value)) {
+    editorEl.value.innerHTML = '<p><br></p>'
+    if (sel) {
+      placeCursorAtStart(sel, editorEl.value.firstElementChild as HTMLElement)
+    }
+  }
+}
+
+function normalizePresentationalInlineArtifacts(): void {
+  if (!editorEl.value) return
+
+  const wrappers = Array.from(editorEl.value.querySelectorAll('font, span')) as HTMLElement[]
+
+  for (const el of wrappers) {
+    if (el.closest('pre')) continue
+    if (el.classList.contains('ce-code-lang') || el.classList.contains('ce-code-lang-input')) continue
+
+    const shouldUnwrap = el.tagName === 'FONT'
+      || (el.tagName === 'SPAN' && el.hasAttribute('style'))
+
+    if (!shouldUnwrap) continue
+
+    unwrapElementPreservingChildren(el)
+  }
+}
+
+function findClosestInlineCodeBlockParent(codeEl: HTMLElement): HTMLElement | null {
+  let blockParent: HTMLElement | null = codeEl.parentElement
+
+  while (blockParent && blockParent !== editorEl.value) {
+    if (/^(P|DIV|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/.test(blockParent.tagName)) {
+      return blockParent
+    }
+    blockParent = blockParent.parentElement
+  }
+
+  return null
+}
+
+function hasRenderableContent(el: HTMLElement): boolean {
+  const normalizedText = (el.textContent || '')
+    .replace(/[\u200B\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+
+  return !!normalizedText || !!el.querySelector('img, br')
+}
+
+function unwrapElementPreservingChildren(el: HTMLElement): void {
+  const parent = el.parentNode
+  if (!parent) return
+
+  while (el.firstChild) {
+    parent.insertBefore(el.firstChild, el)
+  }
+
+  el.remove()
 }
 </script>

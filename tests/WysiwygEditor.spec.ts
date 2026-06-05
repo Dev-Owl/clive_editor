@@ -104,6 +104,100 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('moves above the first code block when pressing ArrowUp on its first line', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><code>const x = 1;\nconst y = 2;</code></pre>'
+    const text = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(text, 5)
+
+    await editor.trigger('keydown', { key: 'ArrowUp' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p><br></p><pre><code>const x = 1;\nconst y = 2;</code></pre>')
+    expect(window.getSelection()?.anchorNode).toBe(editor.element.querySelector('p'))
+    expect(window.getSelection()?.anchorOffset).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('removes an empty inline code wrapper after the editor is cleared', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p><code><br></code></p>'
+    const code = editor.element.querySelector('code')!
+    setCollapsedSelection(code, 0)
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p><br></p>')
+    expect(window.getSelection()?.anchorNode).toBe(editor.element.querySelector('p'))
+    expect(window.getSelection()?.anchorOffset).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('unwraps browser-generated inline code styling artifacts outside pre blocks', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<p><font color="#e11d48" face="SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace"><span style="font-size: 14.4px; background-color: rgb(243, 244, 246);">dsadas</span></font></p>'
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe('<p>dsadas</p>')
+    wrapper.unmount()
+  })
+
+  it('does not route language input keystrokes into the code block', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>const x = 1;</code></pre>'
+
+    const codeText = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(codeText, 2)
+
+    const label = editor.element.querySelector('.ce-code-lang') as HTMLElement
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    const input = editor.element.querySelector('.ce-code-lang-input') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+
+    input!.value = 'j'
+    input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
+    input!.dispatchEvent(new Event('input', { bubbles: true }))
+    input!.dispatchEvent(new KeyboardEvent('keyup', { key: 'j', bubbles: true }))
+    vi.runAllTimers()
+
+    expect(editor.element.querySelector('code')?.textContent).toBe('const x = 1;')
+    expect(input!.value).toBe('j')
+    expect(document.activeElement).toBe(input)
+    wrapper.unmount()
+  })
+
   it('exits a root-level empty list item into a paragraph on Enter', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

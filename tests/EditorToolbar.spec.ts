@@ -101,4 +101,19 @@ describe('EditorToolbar', () => {
     expect(wrapper.get('button[aria-label="Indent List"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('button[aria-label="Outdent List"]').attributes('disabled')).toBeUndefined()
   })
+
+  it('keeps inline code inactive when a code block is active', () => {
+    const ctx = createContext()
+    ctx.isActive = vi.fn((tag: string) => tag === 'code' || tag === 'pre')
+
+    const wrapper = mount(EditorToolbar, {
+      props: {
+        mode: 'wysiwyg',
+        ctx,
+      },
+    })
+
+    expect(wrapper.get('button[aria-label="Inline Code"]').classes()).not.toContain('ce-toolbar__btn--active')
+    expect(wrapper.get('button[aria-label="Code Block"]').classes()).toContain('ce-toolbar__btn--active')
+  })
 })

@@ -422,6 +422,9 @@ function onRootKeydown(e: KeyboardEvent): void {
   } else if (mod && e.key === 'k') {
     e.preventDefault()
     handleToolbarAction('link')
+  } else if (mod && e.key === 'u') {
+    // Prevent browser-native underline – markdown has no underline syntax
+    e.preventDefault()
   } else if (mod && e.shiftKey && e.key.toLocaleLowerCase() === 'z') {
     e.preventDefault()
     doRedo()
