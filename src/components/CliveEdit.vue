@@ -42,6 +42,7 @@ import { useHighlighter } from '@/composables/useHighlighter'
 import { useEmojiPicker } from '@/composables/useEmojiPicker'
 import { getHeadingAction, runMarkdownCommand, runWysiwygCommand } from '@/commands'
 import { parseMarkdown } from '@/utils/markdown'
+import { printMarkdown } from '@/utils/print'
 import { insertHtmlAtCursor, saveSelection, restoreSelection } from '@/utils/selection'
 import type { SavedSelection } from '@/utils/selection'
 import type {
@@ -279,6 +280,13 @@ function renderMarkdownInsertion(markdown: string): string {
 }
 
 function handleToolbarAction(actionName: ToolbarAction): void {
+  // Print opens a read-only, isolated view — it works even while disabled
+  // and never mutates the current document.
+  if (actionName === 'print') {
+    openPrintView()
+    return
+  }
+
   if (props.disabled) return
 
   // Emoji action is handled separately (toggle picker)
@@ -311,6 +319,22 @@ function handleToolbarAction(actionName: ToolbarAction): void {
       runMarkdownCommand(md, actionName)
     }
   }
+}
+
+/* ---- Print ---- */
+
+function openPrintView(): void {
+  // In WYSIWYG mode the latest edits may not yet be serialized to markdown,
+  // so pull the freshest content from the editor before rendering the view.
+  let markdown = props.modelValue
+  if (currentMode.value === 'wysiwyg') {
+    const md = wysiwygRef.value?.syncToMarkdown()
+    if (md !== undefined) markdown = md
+  }
+
+  printMarkdown(markdown, {
+    highlight: highlightFn.value ?? undefined,
+  })
 }
 
 /* ---- Emoji picker ---- */
@@ -411,8 +435,16 @@ function doRedo(): void {
 /* ---- Keyboard shortcuts (captured at root level) ---- */
 
 function onRootKeydown(e: KeyboardEvent): void {
-  if (props.disabled) return
   const mod = e.ctrlKey || e.metaKey
+
+  // Print works regardless of the disabled state and opens an isolated view.
+  if (mod && e.key === 'p') {
+    e.preventDefault()
+    openPrintView()
+    return
+  }
+
+  if (props.disabled) return
   if (mod && e.key === 'b') {
     e.preventDefault()
     handleToolbarAction('bold')
@@ -455,6 +487,7 @@ const editorContext = reactive<EditorContext>({
   horizontalRule: createContextAction('horizontalRule'),
   table: createContextAction('table'),
   emoji: createContextAction('emoji'),
+  print: createContextAction('print'),
   insertText: insertTextAtCursor,
   insertMarkdown: insertMarkdownAtCursor,
   undo: doUndo,
@@ -484,6 +517,8 @@ defineExpose({
   undo: doUndo,
   /** Programmatic redo */
   redo: doRedo,
+  /** Open an isolated print view for the current content */
+  print: openPrintView,
   /** Focus the active editor */
   focus: () => {
     if (currentMode.value === 'wysiwyg') {

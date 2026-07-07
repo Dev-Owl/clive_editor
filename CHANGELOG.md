@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.0
+
+TLDR: Adds a print button that opens an isolated, printable view.
+
+### Added
+
+- New built-in `print` toolbar action (`Printer` icon, `Ctrl+P` / `Cmd+P`) that opens the current document in an isolated print view and triggers the browser print dialog. The print view is rendered in a hidden iframe styled with the editor's CSS, so it never affects the editor content or the host page and works even when the editor is `disabled`. Like every toolbar button it can be omitted via `toolbarItems`.
+- New `print()` method on the `CliveEdit` instance and `print()` on the injected `EditorContext` for programmatic access.
+
+### Internal
+
+- Added `src/utils/print.ts` with unit coverage plus toolbar, command, and integration tests for the new print action.
+
 ## 0.1.19
 
 TLDR: Bug fix release focusing on code elements

@@ -11,7 +11,7 @@
         :class="{ 'ce-toolbar__btn--active': item.active?.(ctx) }"
         :aria-label="item.label"
         :title="item.shortcut ? `${item.label} (${item.shortcut})` : item.label"
-        :disabled="disabled"
+        :disabled="disabled && !isAlwaysEnabled(item)"
         @click="handleAction(item)"
       >
         <component :is="item.icon" :size="18" />
@@ -77,5 +77,11 @@ function handleAction(item: ToolbarItem): void {
 
 function isBuiltInItem(item: ToolbarItem): item is BuiltInToolbarItem {
   return 'action' in item
+}
+
+// Read-only actions (e.g. print) stay clickable even when the editor is
+// disabled, since they never mutate the document.
+function isAlwaysEnabled(item: ToolbarItem): boolean {
+  return isBuiltInItem(item) && item.action === 'print'
 }
 </script>

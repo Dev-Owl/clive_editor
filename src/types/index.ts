@@ -25,6 +25,7 @@ export type ToolbarAction =
   | 'horizontalRule'
   | 'emoji'
   | 'table'
+  | 'print'
   | 'undo'
   | 'redo'
 
@@ -174,6 +175,7 @@ export interface EditorContext {
   horizontalRule: () => void
   table: () => void
   emoji: () => void
+  print: () => void
   insertText: (text: string) => void
   insertMarkdown: (markdown: string) => void
 
