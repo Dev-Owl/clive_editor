@@ -26,7 +26,7 @@
     <div ref="editorEl" class="ce-wysiwyg" contenteditable="true" role="textbox" aria-multiline="true"
       :aria-label="placeholder || 'Rich text editor'" :data-placeholder="placeholder" spellcheck="true"
       @input="onInput($event)" @keydown="onKeydown" @keyup="onSelectionChange" @paste="onPaste" @drop="onDrop"
-      @dragover.prevent @click="onClick" @mouseup="onSelectionChange" />
+      @dragover.prevent @click="onClick" @mouseup="onSelectionChange" @blur="onBlur" />
   </div>
 </template>
 
@@ -72,7 +72,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
-  input: []
   selectionChange: []
   action: [actionName: ToolbarAction]
 }>()
@@ -108,6 +107,13 @@ defineExpose({
   /** Sync HTML → markdown and return the markdown */
   syncToMarkdown: (): string => {
     if (!editorEl.value) return props.modelValue
+    // Cancel any pending debounced emit: the caller is taking the freshly
+    // serialized value now, so a later timer firing would only re-emit an
+    // equal or stale value. Defensive — avoids redundant post-sync emits.
+    if (inputTimer) {
+      clearTimeout(inputTimer)
+      inputTimer = null
+    }
     return serializeHtml(editorEl.value.innerHTML)
   },
   /** Re-render from current modelValue */
@@ -142,6 +148,13 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  // Flush pending input before teardown so the last keystrokes aren't lost if
+  // the component unmounts inside the debounce window.
+  flushInput()
+  if (highlightTimer) {
+    clearTimeout(highlightTimer)
+    highlightTimer = null
+  }
   window.removeEventListener('keydown', onModifierDown)
   window.removeEventListener('keyup', onModifierUp)
   window.removeEventListener('blur', onModifierUp)
@@ -378,6 +391,12 @@ function buildSafeCellSelectionRange(
   return safeRange
 }
 
+function onBlur(): void {
+  // Flush any pending debounced markdown so leaving the editor never drops
+  // the last few keystrokes.
+  flushInput()
+}
+
 function onInput(event?: Event): void {
   if (isSyncing) return
 
@@ -403,8 +422,6 @@ function onInput(event?: Event): void {
 
   normalizeEmptyInlineCode(sel)
   normalizePresentationalInlineArtifacts()
-
-  emit('input')
 
   // Debounced re-highlight of the current code block
   if (props.highlight) {
@@ -441,13 +458,26 @@ function onInput(event?: Event): void {
 
   // Debounced emit of markdown value
   if (inputTimer) clearTimeout(inputTimer)
-  inputTimer = setTimeout(() => {
-    if (!editorEl.value) return
-    isSyncing = true
-    const md = serializeHtml(editorEl.value.innerHTML)
-    emit('update:modelValue', md)
-    isSyncing = false
-  }, 100)
+  inputTimer = setTimeout(flushInput, 100)
+}
+
+/**
+ * Serialize the current DOM to markdown and emit it immediately, cancelling
+ * any pending debounced emit. Called by the debounce timer and also on blur /
+ * before unmount so the latest keystrokes are never lost when the debounce
+ * window is still open.
+ */
+function flushInput(): void {
+  if (inputTimer) {
+    clearTimeout(inputTimer)
+    inputTimer = null
+  }
+  if (!editorEl.value) return
+  const md = serializeHtml(editorEl.value.innerHTML)
+  if (md === props.modelValue) return
+  isSyncing = true
+  emit('update:modelValue', md)
+  isSyncing = false
 }
 
 function onKeydown(e: KeyboardEvent): void {

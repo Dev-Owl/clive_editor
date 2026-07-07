@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1
+
+TLDR: Bug-fix release — Undo/Redo now work in Markdown mode and WYSIWYG edits are no longer at risk of being lost.
+
+### Fixed
+
+- **Undo/Redo buttons did nothing in Markdown mode.** The toolbar Undo/Redo buttons only worked in Visual (WYSIWYG) mode; in Markdown mode they silently no-opped while the `Ctrl+Z` / `Ctrl+Shift+Z` shortcuts still worked, an inconsistency between toolbar and keyboard. They are now dispatched directly and behave identically in both modes.
+- **Possible loss of the last WYSIWYG keystrokes.** The markdown emit is debounced (100 ms); if the editor lost focus or the component unmounted within that window, the most recent edits were never serialized. Pending edits are now flushed on `blur` and before unmount.
+
+### Changed
+
+- Each WYSIWYG edit now serializes to markdown and pushes to the undo history exactly once. Previously every keystroke ran the (expensive) HTML→markdown serialization twice and recorded duplicate history entries, which could require two Undo presses per edit.
+
+### Internal
+
+- Cleared the re-highlight/input debounce timers on unmount, and cancel the pending input debounce when the DOM is serialized on demand (mode switch / toolbar action) to avoid redundant post-sync emits.
+- Removed an unused `ToolbarItem` type import in `commands.ts`.
+- Added unit regression tests for Markdown-mode Undo/Redo, flush-on-blur, flush-on-unmount, and single-emit-per-edit, plus an end-to-end `input-loss` Playwright suite covering fast type-then-switch, type-then-blur, and post-round-trip editing.
+
 ## 0.2.0
 
 TLDR: Adds a print button that opens an isolated, printable view.
