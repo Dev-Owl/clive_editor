@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { Bold, Smile } from 'lucide-vue-next'
+import { Bold, Printer, Smile } from 'lucide-vue-next'
 import { describe, expect, it, vi } from 'vitest'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import type { EditorContext, ToolbarItem } from '@/types'
@@ -24,6 +24,7 @@ function createContext(): EditorContext {
     horizontalRule: vi.fn(),
     table: vi.fn(),
     emoji: vi.fn(),
+    print: vi.fn(),
     insertText: vi.fn(),
     insertMarkdown: vi.fn(),
     undo: vi.fn(),
@@ -69,6 +70,33 @@ describe('EditorToolbar', () => {
 
     expect(onClick).toHaveBeenCalledWith(ctx)
     expect(wrapper.emitted('action')).toBeUndefined()
+  })
+
+  it('emits the print action for the built-in print button', async () => {
+    const wrapper = mount(EditorToolbar, {
+      props: {
+        mode: 'wysiwyg',
+        ctx: createContext(),
+        customItems: [
+          { id: 'print', label: 'Print', icon: Printer, action: 'print' } satisfies ToolbarItem,
+        ],
+      },
+    })
+
+    await wrapper.get('button[aria-label="Print"]').trigger('click')
+
+    expect(wrapper.emitted('action')?.[0]).toEqual(['print'])
+  })
+
+  it('renders the built-in print button by default', () => {
+    const wrapper = mount(EditorToolbar, {
+      props: {
+        mode: 'wysiwyg',
+        ctx: createContext(),
+      },
+    })
+
+    expect(wrapper.find('button[aria-label="Print"]').exists()).toBe(true)
   })
 
   it('filters only the built-in emoji action when emoji support is disabled', () => {

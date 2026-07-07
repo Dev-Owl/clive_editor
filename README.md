@@ -221,6 +221,7 @@ const content = ref('')
 | `getMode()` | `() => EditorMode` | Returns the current editing mode. |
 | `undo()` | `() => void` | Programmatically trigger undo. |
 | `redo()` | `() => void` | Programmatically trigger redo. |
+| `print()` | `() => void` | Open an isolated print view of the current content and trigger the browser print dialog. |
 | `focus()` | `() => void` | Focus the active editor area (WYSIWYG or textarea). |
 
 ---
@@ -234,6 +235,7 @@ These shortcuts work in both WYSIWYG and Markdown modes:
 | `Ctrl+B` / `Cmd+B` | Bold |
 | `Ctrl+I` / `Cmd+I` | Italic |
 | `Ctrl+K` / `Cmd+K` | Insert link |
+| `Ctrl+P` / `Cmd+P` | Open print view |
 | `Ctrl+Z` / `Cmd+Z` | Undo |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
 | `Tab` (inside list) | Indent list item (increase nesting) |
@@ -266,7 +268,7 @@ In **WYSIWYG mode**, CliveEdit detects common markdown patterns as you type and 
 
 ### Default Toolbar Items
 
-The built-in toolbar includes 19 buttons plus a mode toggle:
+The built-in toolbar includes 20 buttons plus a mode toggle:
 
 | Button | Icon | Action | Active When |
 |---|---|---|---|
@@ -292,6 +294,8 @@ The built-in toolbar includes 19 buttons plus a mode toggle:
 | **Horizontal Rule** | `Minus` | Insert `<hr>` / `---` | — |
 | **Emoji** | `Smile` | Open emoji picker | — |
 | **Table** | `Table` | Insert a 3×3 table | Cursor inside a table |
+| — | *separator* | | |
+| **Print** | `Printer` | Open an isolated print view (`Ctrl+P`) | — |
 | — | *separator* | | |
 | **Undo** | `Undo2` | Undo last change | — |
 | **Redo** | `Redo2` | Redo last undone change | — |
@@ -483,11 +487,14 @@ type ToolbarAction =
   | 'horizontalRule'
   | 'emoji'
   | 'table'
+  | 'print'
   | 'undo'
   | 'redo'
 ```
 
-**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `indentList`, `outdentList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `emoji`, `table`, `undo`, `redo`.
+**Available action names:** `bold`, `italic`, `strikethrough`, `heading1`, `heading2`, `heading3`, `bulletList`, `orderedList`, `indentList`, `outdentList`, `blockquote`, `codeInline`, `codeBlock`, `link`, `image`, `horizontalRule`, `emoji`, `table`, `print`, `undo`, `redo`.
+
+> **Print action:** The `print` action opens the current document in an isolated print view (a hidden iframe styled with the editor's CSS) and triggers the browser's print dialog. It is read-only — the editor content and the host page are never modified — and it works even when the editor is `disabled`.
 
 In markdown mode, `indentList` and `outdentList` follow the same structural rules as visual mode: list items only move one level at a time, and indenting requires a valid previous sibling at the target level.
 

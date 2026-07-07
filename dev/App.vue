@@ -90,6 +90,7 @@ import {
   Image,
   Minus,
   Table,
+  Printer,
   Undo2,
   Redo2,
   Smile,
@@ -253,6 +254,14 @@ const allToolbarFeatures: FeatureDef[] = [
     toolbarItem: {
       id: 'table', label: 'Table', icon: Table, action: 'table',
       active: (ctx) => ctx.isActive('table'),
+    },
+  },
+  {
+    id: 'print', label: 'Print',
+    toolbarItem: {
+      id: 'print', label: 'Print', icon: Printer, action: 'print',
+      divider: true,
+      shortcut: 'Ctrl+P',
     },
   },
   {

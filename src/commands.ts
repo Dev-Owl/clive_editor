@@ -17,6 +17,7 @@ import {
   Minus,
   Table,
   Smile,
+  Printer,
   Undo2,
   Redo2,
 } from 'lucide-vue-next'
@@ -257,6 +258,15 @@ const commandRegistry: Record<ToolbarAction, CommandDefinition> = {
     },
     wysiwyg: { kind: 'method', name: 'table' },
   },
+  print: {
+    toolbar: {
+      id: 'print',
+      label: 'Print',
+      icon: Printer,
+      divider: true,
+      shortcut: 'Ctrl+P',
+    },
+  },
   undo: {
     toolbar: {
       id: 'undo',
@@ -297,6 +307,7 @@ const defaultToolbarActionOrder: ToolbarAction[] = [
   'horizontalRule',
   'emoji',
   'table',
+  'print',
   'undo',
   'redo',
 ]

@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { CalendarClock } from 'lucide-vue-next'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import CliveEdit from '@/components/CliveEdit.vue'
+import * as printUtil from '@/utils/print'
 import type { ToolbarItem } from '@/types'
 
 describe('CliveEdit custom toolbar integration', () => {
@@ -53,5 +54,76 @@ describe('CliveEdit custom toolbar integration', () => {
     await wrapper.get('button[aria-label="Insert Markdown"]').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['**bold**'])
+  })
+})
+
+describe('CliveEdit print action', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.querySelectorAll('iframe').forEach((el) => el.remove())
+  })
+
+  it('opens a print view with the current markdown when the toolbar button is clicked', async () => {
+    const spy = vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '# Hello world',
+        mode: 'markdown',
+      },
+    })
+
+    await wrapper.get('button[aria-label="Print"]').trigger('click')
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0]).toBe('# Hello world')
+  })
+
+  it('prints even when the editor is disabled', async () => {
+    const spy = vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: 'Read only content',
+        mode: 'markdown',
+        disabled: true,
+      },
+    })
+
+    await wrapper.get('button[aria-label="Print"]').trigger('click')
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0]).toBe('Read only content')
+  })
+
+  it('does not mutate the model value when printing', async () => {
+    vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '# Unchanged',
+        mode: 'markdown',
+      },
+    })
+
+    await wrapper.get('button[aria-label="Print"]').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('exposes a programmatic print() method', () => {
+    const spy = vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '# Programmatic',
+        mode: 'markdown',
+      },
+    })
+
+    ;(wrapper.vm as unknown as { print: () => void }).print()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0][0]).toBe('# Programmatic')
   })
 })
