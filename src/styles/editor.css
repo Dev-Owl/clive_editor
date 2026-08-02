@@ -534,6 +534,61 @@
   background: var(--ce-code-bg) !important;
 }
 
+/* ---- Copy-to-clipboard button (viewer only) ---- */
+
+.ce-viewer__content pre .ce-code-copy {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  background: var(--ce-code-copy-bg);
+  color: var(--ce-code-copy-text);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  z-index: 2;
+}
+
+/* Keep the language label clear of the button */
+.ce-viewer__content pre.ce-has-code-copy .ce-code-lang {
+  right: 38px;
+}
+
+.ce-viewer__content pre:hover .ce-code-copy,
+.ce-viewer__content pre:focus-within .ce-code-copy,
+.ce-viewer__content pre .ce-code-copy.is-copied {
+  opacity: 1;
+}
+
+.ce-viewer__content pre .ce-code-copy:hover {
+  background: var(--ce-code-copy-hover-bg);
+  color: var(--ce-code-copy-hover-text);
+}
+
+.ce-viewer__content pre .ce-code-copy:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--ce-focus-ring, currentColor);
+  outline-offset: 1px;
+}
+
+.ce-viewer__content pre .ce-code-copy.is-copied {
+  color: var(--ce-code-copy-done-text);
+}
+
+/* Pointer-less devices have no hover to reveal the button */
+@media (hover: none) {
+  .ce-viewer__content pre .ce-code-copy {
+    opacity: 1;
+  }
+}
+
 .ce-viewer__content blockquote {
   border-left: var(--ce-blockquote-border-width) solid var(--ce-blockquote-border);
   margin: var(--ce-content-margin);

@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## 0.2.2
 
-TLDR: Bug-fix release — editing or pasting inside an existing list no longer corrupts its structure (`-   -   item`).
+TLDR: Adds a copy button to code blocks in the viewer, and fixes list editing — editing or pasting inside an existing list no longer corrupts its structure (`-   -   item`).
+
+### Added
+
+- **Copy button on code blocks in `MarkdownViewer`.** Every rendered code block gets a button that copies the block's content to the clipboard. It fades in when the block is hovered or focused, is always visible on touch devices, confirms the copy for a moment and then resets. Controlled by the new `codeCopyButton` prop (default `true`) and styled with the `--ce-code-copy-*` CSS variables. Viewer only — the editor never shows it. Clipboard writes use the async Clipboard API with a selection-based fallback for insecure origins.
 
 ### Fixed
 
@@ -14,13 +18,18 @@ TLDR: Bug-fix release — editing or pasting inside an existing list no longer c
 - **Switching a bullet/ordered list off left its sub-items as a list.** Nested `<ul>`/`<ol>` elements were copied into the generated paragraph — invalid markup that kept rendering as a list. Sub-items now become paragraphs as well.
 - **Outdenting an item that already had sub-items gave it a second sub-list.** The following siblings now join the sub-list the item already has.
 - **Pasting a list into a list flattened it.** Every `<li>` at any depth was inserted as a sibling of the current item, so a copied two-level list arrived as one flat level (and left an empty `<ul>` behind, which showed up as a blank line). Pasted sub-lists now travel with their item, and indentation in plain-text markdown (spaces or tabs) is read as nesting.
+- **Loose lists were rewritten and picked up an invisible character.** A list with blank lines between its items, or an item owning a second paragraph, a code block or a quote, was indented by the serializer down to a whitespace-only line, which the blank-line handling then stored as a zero-width space (U+200B) in the markdown — and the item's blocks collapsed into `<br>` breaks. Such lists now round-trip unchanged.
 - **Pasting a markdown list outside a list produced escaped text.** `- item` lines pasted into an empty paragraph or an empty document stayed literal text and were written back as `\- item`. They now become a real list — ordered when the lines are numbered. Text pasted into a paragraph that already has content, into a code block, or into a table cell is still inserted verbatim.
+
+- **Table column alignment was silently dropped.** The table sanitizer rewrote every separator row as `| --- |` before the markdown was parsed, so `| :--- | ---: |` never reached the rendered table and could not be written back. Alignment now survives parsing, is rendered, and is serialized again.
+- **A `|` inside a table cell broke the table.** Cell content was never escaped on the way out and rows were split on every pipe on the way in, so a pipe typed into a cell — or an escaped `\|` in the source — added a column and shifted the rest of the row. Pipes are now escaped when writing and ignored when escaped while reading.
 
 ### Internal
 
 - New `src/utils/lists.ts` with the shared list-structure helpers (marker-only item detection, own-content boundaries, and the repair pass) used by both the editor and the HTML→markdown serializer.
 - Turndown's `listItem` rule is now overridden so a marker-only item can never emit a doubled bullet, as a safety net for transient editing states.
-- Added unit regression tests for the repair pass, the serializer rule, list splitting and bullet removal, plus an end-to-end `lists` Playwright suite that covers the flows in a real browser (jsdom cannot reproduce `contenteditable`'s native Enter/Backspace handling).
+- Added unit regression tests for the repair pass, the serializer rule, list splitting, bullet removal and list pasting, plus an end-to-end `lists` Playwright suite that covers the flows in a real browser (jsdom cannot reproduce `contenteditable`'s native Enter/Backspace handling).
+- New `roundtrip` test suite that asserts markdown → HTML → markdown is a fixed point for every supported construct. Instability is what let the list corruption accumulate: each edit writes the serialized document back, so a construct that changes on a round-trip keeps changing on every edit.
 
 ## 0.2.1
 

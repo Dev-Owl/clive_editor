@@ -66,6 +66,12 @@
   --ce-code-lang-text: #6b7280;
   --ce-code-lang-font-size: 0.75em;
 
+  --ce-code-copy-bg: rgba(0, 0, 0, 0.06);
+  --ce-code-copy-text: #6b7280;
+  --ce-code-copy-hover-bg: rgba(0, 0, 0, 0.12);
+  --ce-code-copy-hover-text: #374151;
+  --ce-code-copy-done-text: #16a34a;
+
   --ce-blockquote-border: #6366f1;
   --ce-blockquote-border-width: 4px;
   --ce-blockquote-padding: 4px 16px;

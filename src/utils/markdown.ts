@@ -154,6 +154,44 @@ export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions):
 }
 
 /**
+ * Split a markdown table row into its cells.
+ *
+ * Only unescaped pipes separate cells: `\|` is a pipe inside a cell, and
+ * splitting on it would silently add a column and drop the character.
+ */
+function splitTableCells(line: string): string[] {
+  const trimmed = line.trim()
+  const cells: string[] = []
+  let current = ''
+  let escaped = false
+
+  for (const char of trimmed) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      current += char
+      escaped = true
+      continue
+    }
+    if (char === '|') {
+      cells.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  cells.push(current)
+
+  // Drop the empty segments the leading and trailing pipes produce
+  if (cells.length > 0 && cells[0] === '') cells.shift()
+  if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop()
+  return cells
+}
+
+/**
  * Sanitize malformed markdown tables:
  * - Normalize column counts across all rows
  * - Add missing separator row after the header
@@ -183,23 +221,22 @@ function sanitizeMarkdownTables(markdown: string): string {
 
     // Count max columns across non-separator rows
     const dataLines = tableBuffer.filter((l) => !isSeparator(l))
-    const colCounts = dataLines.map((l) => {
-      const parts = l.trim().split('|')
-      return parts.slice(1, parts.length - 1).length
-    })
+    const colCounts = dataLines.map((l) => splitTableCells(l).length)
     const maxCols = Math.max(...colCounts, 1)
 
     const hasSep = tableBuffer.some(isSeparator)
 
-    // Pad all rows and regenerate separators with correct column count
+    // Pad all rows to the same width. Separator rows keep their own cells so
+    // the column alignment the author wrote (`:--`, `:-:`, `--:`) survives.
     const padded = tableBuffer.map((l) => {
       if (isSeparator(l)) {
-        return '|' + ' --- |'.repeat(maxCols)
+        const cells = splitTableCells(l).map((cell) => cell.trim())
+        while (cells.length < maxCols) cells.push('---')
+        return `|${cells.slice(0, maxCols).map((cell) => ` ${cell} `).join('|')}|`
       }
-      const parts = l.trim().split('|')
-      const cells = parts.slice(1, parts.length - 1)
+      const cells = splitTableCells(l)
       while (cells.length < maxCols) cells.push('  ')
-      return '|' + cells.join('|') + '|'
+      return `|${cells.join('|')}|`
     })
 
     // Insert separator after first row if missing
@@ -345,6 +382,10 @@ td.addRule('listItem', {
     const isParagraph = trimmed !== '' && /\n$/.test(content)
     const body = (trimmed + (isParagraph ? '\n' : ''))
       .replace(/\n/gm, `\n${' '.repeat(prefix.length)}`)
+      // Indenting the separator of an item's own blocks (a second paragraph,
+      // a code block, a quote) leaves a whitespace-only line, which reads as
+      // an intentional empty paragraph and rewrites the author's list.
+      .replace(/^[ \t]+$/gm, '')
 
     return prefix + body + trailingNewline
   },
@@ -414,6 +455,29 @@ function serializeTableCellContent(cell: HTMLElement): string {
     .replace(new RegExp(`\\s*${CELL_BREAK_TOKEN}\\s*`, 'g'), ' <br> ')
     .replace(/\s+/g, ' ')
     .trim()
+    // A raw pipe would end the cell and shift every column after it
+    .replace(/\|/g, '\\|')
+}
+
+/** Column alignment as markdown-it renders it on the cell. */
+function getCellAlignment(cell: HTMLElement): 'left' | 'center' | 'right' | null {
+  const fromStyle = (cell.getAttribute('style') || '').match(/text-align:\s*(left|center|right)/i)
+  if (fromStyle) return fromStyle[1].toLowerCase() as 'left' | 'center' | 'right'
+
+  const fromAttribute = cell.getAttribute('align')
+  if (fromAttribute && /^(left|center|right)$/i.test(fromAttribute)) {
+    return fromAttribute.toLowerCase() as 'left' | 'center' | 'right'
+  }
+  return null
+}
+
+function alignmentSeparator(alignment: 'left' | 'center' | 'right' | null): string {
+  switch (alignment) {
+    case 'left': return ':---'
+    case 'center': return ':---:'
+    case 'right': return '---:'
+    default: return '---'
+  }
 }
 
 function serializeTableCellList(list: HTMLElement): string {
@@ -619,12 +683,18 @@ td.addRule('tableHead', {
     const cells = Array.from(firstRow.children).filter(
       (c) => c.tagName === 'TH' || c.tagName === 'TD',
     ) as HTMLElement[]
-    // Account for colspan when counting separator columns
-    let totalCols = 0
+    // Account for colspan when counting separator columns, and carry each
+    // column's alignment into the separator row
+    const separatorCells: string[] = []
     for (const c of cells) {
-      totalCols += parseInt(c.getAttribute('colspan') || '1', 10) || 1
+      const colspan = parseInt(c.getAttribute('colspan') || '1', 10) || 1
+      separatorCells.push(alignmentSeparator(getCellAlignment(c)))
+      for (let i = 1; i < colspan; i++) {
+        separatorCells.push('---')
+      }
     }
-    const separator = Array.from({ length: totalCols }, () => ' --- ').join('|')
+
+    const separator = separatorCells.map((cell) => ` ${cell} `).join('|')
     return `${content}|${separator}|\n`
   },
 })
@@ -647,21 +717,20 @@ td.addRule('table', {
 
     // Count max columns across non-separator rows
     const dataLines = lines.filter((l) => !isSep(l))
-    const colCounts = dataLines.map((l) => {
-      const parts = l.trim().split('|')
-      return parts.slice(1, parts.length - 1).length
-    })
+    const colCounts = dataLines.map((l) => splitTableCells(l).length)
     const maxCols = Math.max(...colCounts, 1)
 
-    // Pad rows to maxCols and regenerate separators
+    // Pad rows to maxCols; separator cells keep the alignment the head rule
+    // wrote for each column
     const padded = lines.map((l) => {
       if (isSep(l)) {
-        return '|' + ' --- |'.repeat(maxCols)
+        const cells = splitTableCells(l).map((cell) => cell.trim())
+        while (cells.length < maxCols) cells.push('---')
+        return `|${cells.slice(0, maxCols).map((cell) => ` ${cell} `).join('|')}|`
       }
-      const parts = l.trim().split('|')
-      const cells = parts.slice(1, parts.length - 1)
+      const cells = splitTableCells(l)
       while (cells.length < maxCols) cells.push('  ')
-      return '|' + cells.join('|') + '|'
+      return `|${cells.join('|')}|`
     })
 
     // Add separator after first row if missing
