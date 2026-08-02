@@ -69,6 +69,37 @@ describe('useEditor list behavior', () => {
     expect(el.innerHTML).toBe('<ul><li>Parent</li><li>Child<ul><li>Sibling</li></ul></li></ul>')
   })
 
+  it('merges following siblings into the sub-list an outdented item already has', () => {
+    const el = createEditor(
+      '<ul><li>Parent<ul><li>Child<ul><li>Grandchild</li></ul></li><li>Sibling</li></ul></li></ul>',
+    )
+    const editor = useEditor(ref(el))
+    const childText = el.querySelector('ul ul li')!.firstChild!
+    setCollapsedSelection(childText, 0)
+
+    editor.outdentList()
+
+    expect(el.innerHTML).toBe(
+      '<ul><li>Parent</li><li>Child<ul><li>Grandchild</li><li>Sibling</li></ul></li></ul>',
+    )
+    expect(el.querySelectorAll('li > ul')).toHaveLength(1)
+  })
+
+  it('unwraps nested items too when switching a list off', () => {
+    const el = createEditor('<ul><li>Parent<ul><li>Child</li></ul></li><li>Second</li></ul>')
+    const editor = useEditor(ref(el))
+    setCollapsedSelection(el.querySelector('li')!.firstChild!, 0)
+
+    editor.bulletList()
+
+    expect(el.querySelector('ul')).toBeNull()
+    expect(Array.from(el.querySelectorAll('p')).map((p) => p.textContent)).toEqual([
+      'Parent',
+      'Child',
+      'Second',
+    ])
+  })
+
   it('wraps selected table-cell content in a bullet list', () => {
     const el = createEditor('<table><tbody><tr><td>Cell</td></tr></tbody></table>')
     const editor = useEditor(ref(el))

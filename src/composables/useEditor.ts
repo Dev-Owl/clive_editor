@@ -193,14 +193,7 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
       if (listNode && listNode !== el) {
         const frag = document.createDocumentFragment()
-        const items = Array.from(
-          (listNode as HTMLElement).querySelectorAll(':scope > li'),
-        )
-        for (const li of items) {
-          const p = document.createElement('p')
-          p.innerHTML = li.innerHTML
-          frag.appendChild(p)
-        }
+        appendListItemsAsParagraphs(listNode as HTMLElement, frag)
         listNode.parentNode?.replaceChild(frag, listNode)
       }
     } else if (isInsideTag(otherTag)) {
@@ -323,6 +316,35 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       }
     }
     refreshActiveState()
+  }
+
+  /**
+   * Turn a list into paragraphs, sub-lists included.
+   *
+   * Copying `li.innerHTML` into a `<p>` would leave nested `<ul>`/`<ol>`
+   * elements inside the paragraph — invalid markup that keeps rendering as a
+   * list even though the user just switched the list off.
+   */
+  function appendListItemsAsParagraphs(list: HTMLElement, target: DocumentFragment): void {
+    for (const li of Array.from(list.querySelectorAll(':scope > li'))) {
+      const nestedLists = Array.from(li.children).filter(
+        (child) => child.tagName === 'UL' || child.tagName === 'OL',
+      )
+
+      const p = document.createElement('p')
+      for (const child of Array.from(li.childNodes)) {
+        if (nestedLists.includes(child as Element)) continue
+        p.appendChild(child)
+      }
+      if (!p.textContent?.trim() && !p.querySelector('img, br')) {
+        p.innerHTML = '<br>'
+      }
+      target.appendChild(p)
+
+      for (const nested of nestedLists) {
+        appendListItemsAsParagraphs(nested as HTMLElement, target)
+      }
+    }
   }
 
   function insertListInTableCell(
@@ -615,11 +637,15 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
       next = next.nextElementSibling
     }
     if (siblingsAfter.length > 0) {
-      const newSubList = document.createElement(parentList.tagName.toLowerCase())
+      // Reuse the item's own sub-list when it already has one — appending a
+      // second list would render as two separate blocks of children.
+      const existingSubList = li.querySelector(':scope > ul, :scope > ol')
+      const subList = existingSubList?.tagName === parentList.tagName
+        ? existingSubList
+        : li.appendChild(document.createElement(parentList.tagName.toLowerCase()))
       for (const sib of siblingsAfter) {
-        newSubList.appendChild(sib)
+        subList.appendChild(sib)
       }
-      li.appendChild(newSubList)
     }
 
     // Insert li after the grandparent <li> in the grandparent list

@@ -49,6 +49,12 @@ import {
   getAdjacentCell,
   isInsideTag,
 } from '@/utils/selection'
+import {
+  getListItemOwnContentEnd,
+  isListElement,
+  listItemHasOwnContent,
+  repairOrphanedListItems,
+} from '@/utils/lists'
 import TableControls from './TableControls.vue'
 
 /* ---- Props / Emits ---- */
@@ -100,6 +106,7 @@ defineExpose({
       isSyncing = true
       editorEl.value.innerHTML = html
       applyImageSizingMetadata(editorEl.value)
+      normalizeListStructure()
       isSyncing = false
       clearImageSelection()
     }
@@ -123,6 +130,7 @@ defineExpose({
     editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
       highlight: props.highlight,
     })
+    normalizeListStructure()
     isSyncing = false
     clearImageSelection()
   },
@@ -138,6 +146,9 @@ onMounted(() => {
       highlight: props.highlight,
     })
     applyImageSizingMetadata(editorEl.value)
+    // Heal documents that already contain marker-only list items so the
+    // visual list renders at the levels the author intended
+    normalizeListStructure()
   }
   // Listen for modifier keys to show clickable-link cursor hint
   window.addEventListener('keydown', onModifierDown)
@@ -273,6 +284,7 @@ watch(
         highlight: props.highlight,
       })
       applyImageSizingMetadata(editorEl.value)
+      normalizeListStructure()
       isSyncing = false
     }
   },
@@ -422,6 +434,7 @@ function onInput(event?: Event): void {
 
   normalizeEmptyInlineCode(sel)
   normalizePresentationalInlineArtifacts()
+  normalizeListStructure()
 
   // Debounced re-highlight of the current code block
   if (props.highlight) {
@@ -751,7 +764,37 @@ function onKeydown(e: KeyboardEvent): void {
     }
   }
 
-  // ---- Enter on empty <li> inside a list → outdent or exit the list ----
+  // ---- Backspace on a list item without text of its own ----
+  // Removing such a bullet is where the browser does the most damage: it
+  // strips the item's placeholder and leaves the sub-list in a text-less item
+  // (`-   -   text`), or dissolves the list altogether.
+  if (e.key === 'Backspace' && !mod && sel && sel.isCollapsed && sel.rangeCount > 0) {
+    const anchor = sel.anchorNode
+    const liEl = anchor instanceof HTMLElement
+      ? anchor.closest('li')
+      : anchor?.parentElement?.closest('li')
+
+    if (
+      liEl
+      && editorEl.value?.contains(liEl)
+      && !listItemHasOwnContent(liEl)
+      && isSelectionInListItemOwnContent(sel, liEl)
+    ) {
+      const outcome = removeContentlessListItem(sel, liEl)
+      if (outcome === 'outdent') {
+        e.preventDefault()
+        emit('action', 'outdentList')
+        return
+      }
+      if (outcome === 'handled') {
+        e.preventDefault()
+        onInput()
+        return
+      }
+    }
+  }
+
+  // ---- Enter inside a list item → split, outdent or exit the list ----
   if (e.key === 'Enter' && !mod && !e.shiftKey && sel && sel.rangeCount > 0) {
     const anchor = sel.anchorNode
     const liEl = anchor instanceof HTMLElement
@@ -763,31 +806,43 @@ function onKeydown(e: KeyboardEvent): void {
       const liText = liEl.textContent?.trim()
       const hasChildList = !!liEl.querySelector('ul, ol')
       const isEmpty = !liText && !hasChildList
+      const parentList = liEl.parentElement
 
-      if (!isEmpty && isCollapsedSelectionAtListItemContentEnd(sel, liEl)) {
-        const parentList = liEl.parentElement
-        if (parentList && (parentList.tagName === 'UL' || parentList.tagName === 'OL')) {
-          e.preventDefault()
+      // Splitting a list item is always handled here, never by the browser:
+      // for an item with a nested sub-list the browser moves that sub-list
+      // into the new item, leaving a marker-only item behind that serializes
+      // to `-   -   text`.
+      if (
+        !isEmpty
+        && parentList
+        && (parentList.tagName === 'UL' || parentList.tagName === 'OL')
+        && isSelectionInListItemOwnContent(sel, liEl)
+      ) {
+        e.preventDefault()
 
+        if (isCollapsedSelectionAtListItemContentStart(sel, liEl)) {
+          // Caret at the very start → push the item down, keep editing it
+          const newLi = document.createElement('li')
+          newLi.innerHTML = '<br>'
+          parentList.insertBefore(newLi, liEl)
+        } else if (isCollapsedSelectionAtListItemContentEnd(sel, liEl)) {
+          // Caret at the end of the item's own text → start a fresh item
+          // after the whole item, sub-list included
           const newLi = document.createElement('li')
           newLi.innerHTML = '<br>'
           parentList.insertBefore(newLi, liEl.nextSibling)
-
-          const newRange = document.createRange()
-          newRange.selectNodeContents(newLi)
-          newRange.collapse(true)
-          sel.removeAllRanges()
-          sel.addRange(newRange)
-
-          onInput()
-          return
+          placeCursorAtStart(sel, newLi)
+        } else {
+          splitListItemAtSelection(sel, liEl)
         }
+
+        onInput()
+        return
       }
 
       if (isEmpty) {
         e.preventDefault()
 
-        const parentList = liEl.parentElement // <ul> or <ol>
         if (!parentList || (parentList.tagName !== 'UL' && parentList.tagName !== 'OL')) {
           onInput()
           return
@@ -1484,11 +1539,10 @@ function onPaste(e: ClipboardEvent): void {
   temp.innerHTML = cleanHtml
   applyImageSizingMetadata(temp)
 
-  // ---- Flatten pasted list items when pasting inside an existing list ----
-  // When the clipboard contains <ul>/<ol> with <li> items and we're pasting
-  // into an existing list, we unwrap the list containers AND convert each
-  // <li> into its inner content so they merge cleanly into the existing
-  // list structure without creating nested lists (e.g. `- - item`).
+  // ---- Merge pasted list items into the list being pasted into ----
+  // The pasted list containers are unwrapped so their top-level items become
+  // siblings of the current <li>.  Sub-lists travel with their item, so the
+  // structure the author copied survives the paste.
   const anchorNode = sel.anchorNode
   const targetLi = anchorNode instanceof HTMLElement
     ? anchorNode.closest('li')
@@ -1497,24 +1551,24 @@ function onPaste(e: ClipboardEvent): void {
   if (targetLi) {
     const parentList = targetLi.parentElement // the <ul> or <ol>
 
-    // Collect <li> elements from pasted lists and insert them as siblings
-    // after the current <li> in the parent list.
+    repairOrphanedListItems(temp)
     const pastedLists = Array.from(temp.querySelectorAll(':scope > ul, :scope > ol'))
     const plainTextListItems = pastedLists.length === 0 ? parsePlainTextListItems(text) : null
     if (pastedLists.length > 0 || plainTextListItems) {
-      // Gather all <li> items to insert as siblings
       const newItems: HTMLLIElement[] = []
       for (const list of pastedLists) {
+        // Strip list markers that were pasted as text, at every level
         for (const li of Array.from(list.querySelectorAll('li'))) {
-          newItems.push(normalizeListItemElement(li as HTMLLIElement))
+          normalizeListItemElement(li as HTMLLIElement)
         }
+        newItems.push(...Array.from(list.querySelectorAll(':scope > li')) as HTMLLIElement[])
         // Remove the list wrapper from the temp — its items will be inserted
         // directly into the parent list
         list.remove()
       }
 
       if (plainTextListItems) {
-        newItems.push(...plainTextListItems.map((item) => createTextListItem(item)))
+        newItems.push(...buildListItemsFromPlainText(plainTextListItems))
       }
 
       // Any remaining non-list content in temp goes into the current <li>
@@ -1542,14 +1596,44 @@ function onPaste(e: ClipboardEvent): void {
           insertAfter = li
         }
 
-        // Place cursor at the end of the last inserted <li>
+        // Place the cursor at the end of the last pasted line — that is the
+        // deepest last item when the paste brought sub-items along
         const lastLi = newItems[newItems.length - 1] ?? targetLi
-        const cursorRange = document.createRange()
-        cursorRange.selectNodeContents(lastLi)
-        cursorRange.collapse(false) // collapse to end
-        sel.removeAllRanges()
-        sel.addRange(cursorRange)
+        placeCursorAtListItemContentEnd(sel, findDeepestLastListItem(lastLi))
       }
+
+      onInput()
+      return
+    }
+  }
+
+  // ---- Markdown list pasted as plain text outside a list ----
+  // Without this the markers survive as literal text and get escaped on
+  // serialization (`\- item`), so the list never becomes a list.
+  if (!targetLi && !html) {
+    const pasteBlock = findPasteTargetBlock(anchorNode)
+    const plainTextListItems = parsePlainTextListItems(text)
+
+    if (
+      plainTextListItems
+      && !isInsideTag('pre')
+      && !findClosestCell(anchorNode)
+      && (!pasteBlock || /^(P|DIV)$/.test(pasteBlock.tagName))
+      && !pasteBlock?.textContent?.trim()
+    ) {
+      const list = document.createElement(plainTextListItems[0].ordered ? 'ol' : 'ul')
+      for (const item of buildListItemsFromPlainText(plainTextListItems)) {
+        list.appendChild(item)
+      }
+
+      if (pasteBlock) {
+        pasteBlock.replaceWith(list)
+      } else {
+        range.insertNode(list)
+      }
+
+      const lastItem = list.lastElementChild as HTMLElement | null
+      if (lastItem) placeCursorAtListItemContentEnd(sel, findDeepestLastListItem(lastItem))
 
       onInput()
       return
@@ -1575,6 +1659,8 @@ function onPaste(e: ClipboardEvent): void {
   // Lift any block-level elements that ended up nested inside <p> tags
   // (e.g. pasting a heading while the cursor was inside a paragraph).
   normalizeNestedBlocks()
+  // Repair marker-only list items coming from the pasted markup
+  repairOrphanedListItems(editorEl.value)
 
   // Trigger sync
   onInput()
@@ -1733,7 +1819,20 @@ function placeCursorAtStart(sel: Selection, el: HTMLElement): void {
   sel.addRange(newRange)
 }
 
-function parsePlainTextListItems(text: string): string[] | null {
+interface PlainTextListItem {
+  depth: number
+  text: string
+  ordered: boolean
+}
+
+/**
+ * Parse clipboard text that is entirely a markdown list.
+ *
+ * Indentation becomes nesting depth.  The widths themselves are not
+ * comparable across sources (two spaces, four spaces, tabs), so every deeper
+ * indent opens a level and falling back to a known width closes down to it.
+ */
+function parsePlainTextListItems(text: string): PlainTextListItem[] | null {
   const lines = text
     .replace(/\r\n?/g, '\n')
     .split('\n')
@@ -1741,12 +1840,73 @@ function parsePlainTextListItems(text: string): string[] | null {
 
   if (lines.length === 0) return null
 
-  const items = lines.map((line) => {
-    const match = line.match(LIST_MARKER_TEXT_RE)
-    return match ? match[3] : null
-  })
+  const items: PlainTextListItem[] = []
+  const openIndents: number[] = []
 
-  return items.every((item): item is string => item !== null) ? items : null
+  for (const line of lines) {
+    const match = line.match(LIST_MARKER_TEXT_RE)
+    if (!match) return null
+
+    const indent = match[1].replace(/\t/g, '    ').length
+    while (openIndents.length > 0 && indent < openIndents[openIndents.length - 1]) {
+      openIndents.pop()
+    }
+    if (openIndents.length === 0 || indent > openIndents[openIndents.length - 1]) {
+      openIndents.push(indent)
+    }
+
+    items.push({
+      depth: openIndents.length - 1,
+      text: match[3],
+      ordered: /^\d/.test(match[2]),
+    })
+  }
+
+  return items
+}
+
+/** Build list items — sub-lists included — from parsed plain-text lines. */
+function buildListItemsFromPlainText(items: PlainTextListItem[]): HTMLLIElement[] {
+  const topLevelItems: HTMLLIElement[] = []
+  const openItems: HTMLLIElement[] = []
+
+  for (const item of items) {
+    const listItem = createTextListItem(item.text)
+    // A line cannot open more than one level at a time
+    const depth = Math.min(item.depth, openItems.length)
+
+    if (depth === 0) {
+      topLevelItems.push(listItem)
+    } else {
+      const parentItem = openItems[depth - 1]
+      const subList = parentItem.querySelector(':scope > ul, :scope > ol')
+        ?? parentItem.appendChild(document.createElement(item.ordered ? 'ol' : 'ul'))
+      subList.appendChild(listItem)
+    }
+
+    openItems[depth] = listItem
+    openItems.length = depth + 1
+  }
+
+  return topLevelItems
+}
+
+/** The item a pasted block ends on: the deepest last item of its sub-tree. */
+function findDeepestLastListItem(listItem: HTMLElement): HTMLElement {
+  let current = listItem
+  for (;;) {
+    const nested = current.querySelector(':scope > ul > li:last-child, :scope > ol > li:last-child')
+    if (!nested) return current
+    current = nested as HTMLElement
+  }
+}
+
+/** Closest block the caret sits in, or null at the editor root. */
+function findPasteTargetBlock(node: Node | null): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : node?.parentElement
+  const block = element?.closest('p, div, h1, h2, h3, h4, h5, h6, blockquote, li, td, th')
+  if (!block || block === editorEl.value || !editorEl.value?.contains(block)) return null
+  return block as HTMLElement
 }
 
 function createTextListItem(text: string): HTMLLIElement {
@@ -1801,45 +1961,179 @@ function stripLeadingListMarker(text: string): string {
   return match ? match[3] : text
 }
 
-function getListItemContentNodes(listItem: HTMLLIElement): Node[] {
-  return Array.from(listItem.childNodes).filter((node) => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return true
-    const tagName = (node as HTMLElement).tagName
-    return tagName !== 'UL' && tagName !== 'OL'
-  })
+/**
+ * Check whether a boundary point sits inside the list item's *own* content,
+ * i.e. inside the item but not inside one of its nested sub-lists.
+ */
+function isPointInListItemOwnContent(
+  listItem: HTMLLIElement,
+  container: Node,
+  offset: number,
+): boolean {
+  if (container === listItem) return offset <= getListItemOwnContentEnd(listItem)
+  if (!listItem.contains(container)) return false
+
+  let current: Node | null = container
+  while (current && current !== listItem) {
+    if (isListElement(current)) return false
+    current = current.parentNode
+  }
+  return true
 }
 
-function findLastListContentTextNode(root: Node): Text | null {
-  const childNodes = Array.from(root.childNodes)
-  for (let index = childNodes.length - 1; index >= 0; index -= 1) {
-    const child = childNodes[index]
-    if (child.nodeType === Node.TEXT_NODE && child.textContent) {
-      return child as Text
-    }
+function isSelectionInListItemOwnContent(selection: Selection, listItem: HTMLLIElement): boolean {
+  if (selection.rangeCount === 0) return false
+  const range = selection.getRangeAt(0)
+  return isPointInListItemOwnContent(listItem, range.startContainer, range.startOffset)
+    && isPointInListItemOwnContent(listItem, range.endContainer, range.endOffset)
+}
 
-    if (child.nodeType !== Node.ELEMENT_NODE) continue
-
-    const childElement = child as HTMLElement
-    if (childElement.tagName === 'UL' || childElement.tagName === 'OL') continue
-
-    const nestedTextNode = findLastListContentTextNode(child)
-    if (nestedTextNode) return nestedTextNode
-  }
-
-  return null
+/**
+ * Range from the caret to the end of the item's own content.  Nested
+ * sub-lists are excluded, so items with children are handled the same way as
+ * plain ones — markdown rendering leaves whitespace text nodes around the
+ * nested `<ul>`, which a node-identity check would mistake for content.
+ */
+function createListItemContentTailRange(range: Range, listItem: HTMLLIElement): Range {
+  const tail = document.createRange()
+  tail.setStart(range.endContainer, range.endOffset)
+  tail.setEnd(listItem, getListItemOwnContentEnd(listItem))
+  return tail
 }
 
 function isCollapsedSelectionAtListItemContentEnd(selection: Selection, listItem: HTMLLIElement): boolean {
   if (!selection.isCollapsed || selection.rangeCount === 0) return false
 
-  const lastTextNode = findLastListContentTextNode(listItem)
-  if (lastTextNode) {
-    return selection.focusNode === lastTextNode
-      && selection.focusOffset === (lastTextNode.textContent?.length ?? 0)
+  const tail = createListItemContentTailRange(selection.getRangeAt(0), listItem)
+  return !tail.toString().trim() && !tail.cloneContents().querySelector('img')
+}
+
+function isCollapsedSelectionAtListItemContentStart(selection: Selection, listItem: HTMLLIElement): boolean {
+  if (!selection.isCollapsed || selection.rangeCount === 0) return false
+
+  const range = selection.getRangeAt(0)
+  const head = document.createRange()
+  head.setStart(listItem, 0)
+  head.setEnd(range.startContainer, range.startOffset)
+  return !head.toString().trim() && !head.cloneContents().querySelector('img')
+}
+
+/**
+ * Split a list item at the caret: everything after it moves into a new item
+ * below.  Nested sub-lists always stay with the original item, so a split can
+ * never produce a marker-only item.
+ */
+function splitListItemAtSelection(selection: Selection, listItem: HTMLLIElement): void {
+  const parentList = listItem.parentElement
+  if (!parentList) return
+
+  const range = selection.getRangeAt(0)
+  if (!selection.isCollapsed) range.deleteContents()
+
+  const tail = createListItemContentTailRange(range, listItem)
+  const tailContent = tail.extractContents()
+
+  const newLi = document.createElement('li')
+  if (tailContent.textContent?.trim() || tailContent.querySelector('img')) {
+    newLi.appendChild(tailContent)
+  } else {
+    newLi.innerHTML = '<br>'
+  }
+  parentList.insertBefore(newLi, listItem.nextSibling)
+
+  // Keep the original item editable when the split emptied it
+  if (!listItemHasOwnContent(listItem)) {
+    listItem.insertBefore(document.createElement('br'), listItem.firstChild)
   }
 
-  const contentNodes = getListItemContentNodes(listItem)
-  return contentNodes.length === 0
+  placeCursorAtStart(selection, newLi)
+}
+
+/** Place the caret at the end of the item's own text, before its sub-list. */
+function placeCursorAtListItemContentEnd(selection: Selection, listItem: HTMLElement): void {
+  const contentEnd = getListItemOwnContentEnd(listItem)
+  const lastNode = listItem.childNodes[contentEnd - 1]
+  const range = document.createRange()
+
+  if (lastNode?.nodeType === Node.TEXT_NODE) {
+    range.setStart(lastNode, (lastNode.textContent ?? '').length)
+  } else {
+    range.setStart(listItem, contentEnd)
+  }
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+/** Move an item's sub-lists onto `target`, merging with a sub-list it has. */
+function transferSubLists(listItem: HTMLElement, target: HTMLElement): void {
+  for (const nested of Array.from(listItem.children).filter((child) => isListElement(child))) {
+    const existing = target.querySelector(':scope > ul, :scope > ol')
+    if (existing && existing.tagName === nested.tagName) {
+      while (nested.firstChild) existing.appendChild(nested.firstChild)
+      nested.remove()
+    } else {
+      target.appendChild(nested)
+    }
+  }
+}
+
+/**
+ * Delete a list item that has no text of its own, keeping its sub-list where
+ * the author would expect it.  Returns `'outdent'` when the item should be
+ * lifted a level instead — that is handled by the outdent command.
+ */
+function removeContentlessListItem(
+  selection: Selection,
+  listItem: HTMLElement,
+): 'handled' | 'outdent' | null {
+  const parentList = listItem.parentElement
+  if (!parentList || !isListElement(parentList)) return null
+
+  const previousItem = listItem.previousElementSibling
+  if (previousItem?.tagName === 'LI') {
+    // Its children belonged to the item above before the bullet was emptied
+    transferSubLists(listItem, previousItem as HTMLElement)
+    listItem.remove()
+    placeCursorAtListItemContentEnd(selection, previousItem as HTMLElement)
+    return 'handled'
+  }
+
+  const grandparentItem = parentList.parentElement
+  if (grandparentItem?.tagName === 'LI') {
+    if (listItem.querySelector('ul, ol')) return 'outdent'
+
+    listItem.remove()
+    if (parentList.children.length === 0) parentList.remove()
+    placeCursorAtListItemContentEnd(selection, grandparentItem as HTMLElement)
+    return 'handled'
+  }
+
+  // First item of a top-level list → leave the list, its children move up
+  const paragraph = document.createElement('p')
+  paragraph.innerHTML = '<br>'
+  for (const nested of Array.from(listItem.children).filter((child) => isListElement(child))) {
+    while (nested.firstChild) parentList.insertBefore(nested.firstChild, listItem)
+    nested.remove()
+  }
+  listItem.remove()
+  parentList.parentNode?.insertBefore(paragraph, parentList)
+  if (parentList.children.length === 0) parentList.remove()
+  placeCursorAtStart(selection, paragraph)
+  return 'handled'
+}
+
+/**
+ * Repair list items that only wrap a nested list.  Browsers create them when
+ * they split an item that has children; markdown cannot express them.  The
+ * item currently holding the caret is left alone so the repair never pulls
+ * content away mid-edit.
+ */
+function normalizeListStructure(): boolean {
+  const selection = window.getSelection()
+  return repairOrphanedListItems(editorEl.value, {
+    protectedNodes: [selection?.anchorNode, selection?.focusNode],
+  })
 }
 
 function findCodeBlockArrowUpExitTarget(selection: Selection): Node | null {

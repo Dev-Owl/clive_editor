@@ -303,7 +303,7 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
-  it('flattens pasted list items into the current list', async () => {
+  it('merges pasted list items into the current list', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
       props: {
@@ -328,7 +328,7 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
-  it('flattens pasted markdown-style list text into the current list', async () => {
+  it('merges pasted markdown-style list text into the current list', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
       props: {

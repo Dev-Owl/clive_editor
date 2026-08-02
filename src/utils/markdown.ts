@@ -9,6 +9,7 @@ import {
   createImageMarkdownTitle,
   getImageWidth,
 } from './imageSizing'
+import { isListWrapperOnlyItem } from './lists'
 
 /* ---------- Types ---------- */
 
@@ -298,6 +299,54 @@ td.addRule('image', {
     return escapedTitle
       ? `![${alt}](${wrappedSrc} "${escapedTitle}")`
       : `![${alt}](${wrappedSrc})`
+  },
+})
+
+/* ---------- List item rule ---------- */
+
+function trimListNewlines(content: string): string {
+  // Trailing hard breaks (`<br>` placeholders in emptied items) would end up
+  // as a blank line inside the list, which turns it into a loose list and
+  // pushes the following items apart.
+  return content.replace(/^\n*/, '').replace(/[ \t\n]*$/, '')
+}
+
+/*
+ * Turndown's default rule prefixes every <li> with a bullet, so a list item
+ * that only wraps a nested list is emitted as `-   -   item`.  Re-parsing that
+ * recreates the same broken structure, so the list drifts a level deeper on
+ * every round-trip.  Such items are emitted without a marker of their own:
+ * their children take the orphaned item's place.
+ *
+ * Everything else follows Turndown's built-in listItem behaviour.
+ */
+td.addRule('listItem', {
+  filter: 'li',
+  replacement(content, node, options) {
+    const trailingNewline = node.nextSibling ? '\n' : ''
+
+    if (isListWrapperOnlyItem(node)) {
+      // Drop the placeholder break of an emptied item, then let the nested
+      // items take its place
+      return trimListNewlines(content.replace(/^(?:[ \t]*\n)+/, '')) + trailingNewline
+    }
+
+    let prefix = `${options.bulletListMarker}   `
+    const parent = node.parentNode as HTMLElement | null
+    if (parent?.nodeName === 'OL') {
+      const start = parent.getAttribute('start')
+      const index = Array.prototype.indexOf.call(parent.children, node)
+      prefix = `${start ? Number(start) + index : index + 1}.  `
+    }
+
+    // An item without content must not emit the indentation of a follow-up
+    // line — that lands as a whitespace-only line and loosens the whole list.
+    const trimmed = trimListNewlines(content)
+    const isParagraph = trimmed !== '' && /\n$/.test(content)
+    const body = (trimmed + (isParagraph ? '\n' : ''))
+      .replace(/\n/gm, `\n${' '.repeat(prefix.length)}`)
+
+    return prefix + body + trailingNewline
   },
 })
 
