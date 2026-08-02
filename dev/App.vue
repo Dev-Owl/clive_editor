@@ -20,6 +20,10 @@
             <input type="checkbox" v-model="darkMode" />
             <span>Dark theme</span>
           </label>
+          <label class="toggle">
+            <input type="checkbox" v-model="codeCopyButton" />
+            <span>Viewer copy button</span>
+          </label>
         </div>
       </div>
 
@@ -63,7 +67,8 @@
       <code>&lt;MarkdownViewer v-model="md" /&gt;</code> for display-only scenarios.
     </p>
     <div :class="{ 'dark-theme': darkMode }">
-      <MarkdownViewer v-model="markdown" :highlight-options="syntaxHighlight ? highlightConfig : undefined" />
+      <MarkdownViewer v-model="markdown" :highlight-options="syntaxHighlight ? highlightConfig : undefined"
+        :code-copy-button="codeCopyButton" />
     </div>
   </div>
 </template>
@@ -103,6 +108,7 @@ import readmeContent from '../README.md?raw'
 const darkMode = ref(false)
 const syntaxHighlight = ref(true)
 const emojiPicker = ref(true)
+const codeCopyButton = ref(true)
 const mode = ref<EditorMode>('wysiwyg')
 const markdown = ref(readmeContent)
 

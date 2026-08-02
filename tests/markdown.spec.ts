@@ -117,4 +117,29 @@ describe('markdown utils', () => {
     expect(markdown).toContain('| - asdasdas <br> - asdasdas <br> - asdasasd <br> 1. asdasd |')
     expect(roundtrip).toContain('<td><ul><li>asdasdas</li><li>asdasdas</li><li>asdasasd</li></ul><ol><li>asdasd</li></ol></td>')
   })
+
+  it('expands colspan cells into multiple markdown columns', () => {
+    const html = '<table><thead><tr><th colspan="2">Wide</th></tr></thead><tbody><tr><td>A</td><td>B</td></tr></tbody></table>'
+    const markdown = serializeHtml(html)
+
+    // The colspan header must occupy two columns, padded with an empty cell,
+    // and the separator row must have two columns to match.
+    expect(markdown).toContain('| Wide |  |')
+    expect(markdown).toContain('| --- | --- |')
+    expect(markdown).toContain('| A | B |')
+  })
+
+  it('preserves plain-text segments interleaved with lists in a table cell', () => {
+    const html = '<table><thead><tr><th>Header</th></tr></thead><tbody><tr><td>Intro<br><ul><li>One</li></ul><br>Outro</td></tr></tbody></table>'
+    const markdown = serializeHtml(html)
+    const roundtrip = parseMarkdown(markdown)
+
+    // Both the plain text and the list survive the round-trip.
+    expect(markdown).toContain('Intro')
+    expect(markdown).toContain('- One')
+    expect(markdown).toContain('Outro')
+    expect(roundtrip).toContain('Intro')
+    expect(roundtrip).toContain('<li>One</li>')
+    expect(roundtrip).toContain('Outro')
+  })
 })

@@ -188,6 +188,39 @@ describe('CliveEdit orchestration integration', () => {
     expect((wrapper.vm as { value: string }).value).toBe('[***Hello***](url)')
   })
 
+  it('supports the Undo/Redo toolbar buttons in markdown mode', async () => {
+    const Harness = defineComponent({
+      components: { CliveEdit },
+      setup() {
+        const value = ref('Hello')
+        return { value }
+      },
+      template: '<CliveEdit v-model="value" mode="markdown" />',
+    })
+
+    const wrapper = mount(Harness, {
+      attachTo: document.body,
+    })
+
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+
+    // Make a formatting change via the toolbar so there is history to undo.
+    setTextareaSelection(textarea, 0, 5)
+    await wrapper.get('button[aria-label="Bold"]').trigger('click')
+    await settle()
+    expect((wrapper.vm as { value: string }).value).toBe('**Hello**')
+
+    // The Undo button must work in markdown mode (regression: it used to
+    // no-op because runMarkdownCommand had no history spec).
+    await wrapper.get('button[aria-label="Undo"]').trigger('click')
+    await settle()
+    expect((wrapper.vm as { value: string }).value).toBe('Hello')
+
+    await wrapper.get('button[aria-label="Redo"]').trigger('click')
+    await settle()
+    expect((wrapper.vm as { value: string }).value).toBe('**Hello**')
+  })
+
   it('integrates undo and redo in visual mode after a real formatting change', async () => {
     const Harness = defineComponent({
       components: { CliveEdit },

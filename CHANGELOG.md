@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.2
+
+TLDR: Adds a copy button to code blocks in the viewer, and fixes list editing — editing or pasting inside an existing list no longer corrupts its structure (`-   -   item`).
+
+### Added
+
+- **Copy button on code blocks in `MarkdownViewer`.** Every rendered code block gets a button that copies the block's content to the clipboard. It fades in when the block is hovered or focused, is always visible on touch devices, confirms the copy for a moment and then resets. Controlled by the new `codeCopyButton` prop (default `true`) and styled with the `--ce-code-copy-*` CSS variables. Viewer only — the editor never shows it. Clipboard writes use the async Clipboard API with a selection-based fallback for insecure origins.
+
+### Fixed
+
+- **Lists drifted a level deeper and grew doubled bullets (`-   -   item`).** Deleting a list item's text and then removing the empty bullet left the sub-list inside an item that has no line of its own. Markdown cannot express that: it was written as a doubled marker, which re-parsed into the very same structure, so each round-trip pushed the list another level deeper and the visual list stopped matching the document. Removing such a bullet is now handled by the editor: the sub-list goes back to the item above, or moves up a level when there is no item to attach it to. Documents that already contain doubled markers are repaired when they are loaded into Visual mode.
+- **Pressing Enter in a list item that has sub-items.** The "caret at end of item" check looked at the item's last text node, which for rendered markdown is the whitespace after the nested `<ul>` — so it never matched for items with children and the browser split the item itself, moving the sub-list into a new, text-less item. Enter is now handled by the editor for every caret position in a list item: at the end it starts a sibling item below the whole sub-tree, at the start it pushes the item down, and in the middle it splits the text while the sub-items stay with the original item.
+- **Emptying a list item's text inserted a blank line into the list.** The item's placeholder was serialized as an indentation-only line, which turns the surrounding list into a loose list and pushes the items apart.
+- **Switching a bullet/ordered list off left its sub-items as a list.** Nested `<ul>`/`<ol>` elements were copied into the generated paragraph — invalid markup that kept rendering as a list. Sub-items now become paragraphs as well.
+- **Outdenting an item that already had sub-items gave it a second sub-list.** The following siblings now join the sub-list the item already has.
+- **Pasting a list into a list flattened it.** Every `<li>` at any depth was inserted as a sibling of the current item, so a copied two-level list arrived as one flat level (and left an empty `<ul>` behind, which showed up as a blank line). Pasted sub-lists now travel with their item, and indentation in plain-text markdown (spaces or tabs) is read as nesting.
+- **Loose lists were rewritten and picked up an invisible character.** A list with blank lines between its items, or an item owning a second paragraph, a code block or a quote, was indented by the serializer down to a whitespace-only line, which the blank-line handling then stored as a zero-width space (U+200B) in the markdown — and the item's blocks collapsed into `<br>` breaks. Such lists now round-trip unchanged.
+- **Pasting a markdown list outside a list produced escaped text.** `- item` lines pasted into an empty paragraph or an empty document stayed literal text and were written back as `\- item`. They now become a real list — ordered when the lines are numbered. Text pasted into a paragraph that already has content, into a code block, or into a table cell is still inserted verbatim.
+
+- **Table column alignment was silently dropped.** The table sanitizer rewrote every separator row as `| --- |` before the markdown was parsed, so `| :--- | ---: |` never reached the rendered table and could not be written back. Alignment now survives parsing, is rendered, and is serialized again.
+- **A `|` inside a table cell broke the table.** Cell content was never escaped on the way out and rows were split on every pipe on the way in, so a pipe typed into a cell — or an escaped `\|` in the source — added a column and shifted the rest of the row. Pipes are now escaped when writing and ignored when escaped while reading.
+
+### Internal
+
+- New `src/utils/lists.ts` with the shared list-structure helpers (marker-only item detection, own-content boundaries, and the repair pass) used by both the editor and the HTML→markdown serializer.
+- Turndown's `listItem` rule is now overridden so a marker-only item can never emit a doubled bullet, as a safety net for transient editing states.
+- Added unit regression tests for the repair pass, the serializer rule, list splitting, bullet removal and list pasting, plus an end-to-end `lists` Playwright suite that covers the flows in a real browser (jsdom cannot reproduce `contenteditable`'s native Enter/Backspace handling).
+- New `roundtrip` test suite that asserts markdown → HTML → markdown is a fixed point for every supported construct. Instability is what let the list corruption accumulate: each edit writes the serialized document back, so a construct that changes on a round-trip keeps changing on every edit.
+
+## 0.2.1
+
+TLDR: Bug-fix release — Undo/Redo now work in Markdown mode and WYSIWYG edits are no longer at risk of being lost.
+
+### Fixed
+
+- **Undo/Redo buttons did nothing in Markdown mode.** The toolbar Undo/Redo buttons only worked in Visual (WYSIWYG) mode; in Markdown mode they silently no-opped while the `Ctrl+Z` / `Ctrl+Shift+Z` shortcuts still worked, an inconsistency between toolbar and keyboard. They are now dispatched directly and behave identically in both modes.
+- **Possible loss of the last WYSIWYG keystrokes.** The markdown emit is debounced (100 ms); if the editor lost focus or the component unmounted within that window, the most recent edits were never serialized. Pending edits are now flushed on `blur` and before unmount.
+
+### Changed
+
+- Each WYSIWYG edit now serializes to markdown and pushes to the undo history exactly once. Previously every keystroke ran the (expensive) HTML→markdown serialization twice and recorded duplicate history entries, which could require two Undo presses per edit.
+
+### Internal
+
+- Cleared the re-highlight/input debounce timers on unmount, and cancel the pending input debounce when the DOM is serialized on demand (mode switch / toolbar action) to avoid redundant post-sync emits.
+- Removed an unused `ToolbarItem` type import in `commands.ts`.
+- Added unit regression tests for Markdown-mode Undo/Redo, flush-on-blur, flush-on-unmount, and single-emit-per-edit, plus an end-to-end `input-loss` Playwright suite covering fast type-then-switch, type-then-blur, and post-round-trip editing.
+
 ## 0.2.0
 
 TLDR: Adds a print button that opens an isolated, printable view.

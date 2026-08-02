@@ -10,7 +10,7 @@
     <WysiwygEditor v-show="currentMode === 'wysiwyg'" ref="wysiwygRef" :model-value="modelValue"
       :placeholder="placeholder" :disabled="disabled" :highlight="highlightFn ?? undefined"
       :on-image-upload="onImageUpload" :max-image-size="maxImageSize" @update:model-value="onContentUpdate"
-      @input="onWysiwygInput" @selection-change="onSelectionChange" @action="handleToolbarAction" />
+      @selection-change="onSelectionChange" @action="handleToolbarAction" />
 
     <!-- Markdown Editor -->
     <MarkdownEditor v-show="currentMode === 'markdown'" ref="markdownRef" :model-value="modelValue"
@@ -207,15 +207,6 @@ function onContentUpdate(md: string): void {
   }
 }
 
-function onWysiwygInput(): void {
-  // After user types, serialize from the WYSIWYG editor
-  const md = wysiwygRef.value?.syncToMarkdown()
-  if (md !== undefined && md !== props.modelValue) {
-    emit('update:modelValue', md)
-    history.pushState(md)
-  }
-}
-
 function onSelectionChange(): void {
   editor.refreshActiveState()
   lastWysiwygSelection = saveSelection()
@@ -295,21 +286,26 @@ function handleToolbarAction(actionName: ToolbarAction): void {
     return
   }
 
-  // History: push immediate before destructive actions
-  if (actionName !== 'undo' && actionName !== 'redo') {
-    history.pushImmediate(props.modelValue)
+  // Undo / redo are mode-independent: dispatch them directly so they work
+  // in both WYSIWYG and Markdown mode. (The command registry only defines a
+  // WYSIWYG history spec, so routing them through runMarkdownCommand would
+  // silently no-op in Markdown mode.)
+  if (actionName === 'undo') {
+    doUndo()
+    return
+  }
+  if (actionName === 'redo') {
+    doRedo()
+    return
   }
 
+  // History: push immediate before destructive actions
+  history.pushImmediate(props.modelValue)
+
   if (currentMode.value === 'wysiwyg') {
-    const executed = runWysiwygCommand(
-      {
-        ...editor,
-        undo: doUndo,
-        redo: doRedo,
-      },
-      actionName,
-    )
-    if (executed && actionName !== 'undo' && actionName !== 'redo') {
+    // undo/redo are handled above; provide them to satisfy the command target type.
+    const executed = runWysiwygCommand({ ...editor, undo: doUndo, redo: doRedo }, actionName)
+    if (executed) {
       syncWysiwygToMarkdown()
     }
   } else {

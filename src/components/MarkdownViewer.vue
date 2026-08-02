@@ -1,14 +1,20 @@
 <template>
   <div class="cliveedit ce-viewer" :class="{ 'ce-viewer--bordered': bordered }">
-    <div class="ce-viewer__content" v-html="renderedHtml" />
+    <div class="ce-viewer__content" v-html="renderedHtml" @click="onContentClick" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { parseMarkdown } from '@/utils/markdown'
 import { useInjectHighlight } from '@/composables/useHighlighter'
 import { initHighlighter, highlightCode, isHighlighterReady } from '@/utils/highlighter'
+import {
+  addCodeCopyButtons,
+  copyCodeBlock,
+  clearCopyFeedback,
+  findCopyButton,
+} from '@/utils/codeCopy'
 import type { HighlightOptions } from '@/types'
 
 /* ---- Props ---- */
@@ -24,10 +30,16 @@ export interface MarkdownViewerProps {
    * When used inside CliveEdit, highlighting is injected automatically.
    */
   highlightOptions?: HighlightOptions
+  /**
+   * Show a button on every code block that copies its content to the
+   * clipboard (default true). Viewer only — the editor never shows it.
+   */
+  codeCopyButton?: boolean
 }
 
 const props = withDefaults(defineProps<MarkdownViewerProps>(), {
   bordered: true,
+  codeCopyButton: true,
 })
 
 /* ---- Syntax highlighting ---- */
@@ -67,8 +79,21 @@ const renderedHtml = computed(() => {
       ? (code: string, lang: string) => highlightCode(code, lang, !!props.highlightOptions?.darkMode)
       : undefined)
 
-  return parseMarkdown(props.modelValue, {
+  const html = parseMarkdown(props.modelValue, {
     highlight: hlFn ?? undefined,
   })
+
+  return props.codeCopyButton ? addCodeCopyButtons(html) : html
 })
+
+/* ---- Copy to clipboard ---- */
+
+// The rendered markup is injected with v-html, so the buttons cannot carry
+// Vue listeners — the clicks are picked up on the content element instead.
+function onContentClick(event: MouseEvent): void {
+  const button = findCopyButton(event.target)
+  if (button) copyCodeBlock(button)
+}
+
+onBeforeUnmount(clearCopyFeedback)
 </script>

@@ -89,6 +89,69 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('flushes pending markdown on blur so the last keystrokes are not lost', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.textContent = 'Hello world'
+    setCollapsedSelection(editor.element.firstChild!, 11)
+
+    // Fire input but DO NOT run the debounce timer — the edit is still pending.
+    await editor.trigger('input')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    // Blurring must flush the pending markdown immediately.
+    await editor.trigger('blur')
+
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('Hello world')
+    wrapper.unmount()
+  })
+
+  it('flushes pending markdown before unmount so no input is dropped', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.textContent = 'Unsaved text'
+    setCollapsedSelection(editor.element.firstChild!, 12)
+
+    await editor.trigger('input')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    // Unmount within the debounce window — the pending edit must still emit.
+    wrapper.unmount()
+
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('Unsaved text')
+  })
+
+  it('emits markdown only once per edit (single serialize path)', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.textContent = 'abc'
+    setCollapsedSelection(editor.element.firstChild!, 3)
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(wrapper.emitted('update:modelValue')?.length).toBe(1)
+    wrapper.unmount()
+  })
+
   it('opens a link on ctrl click', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
@@ -240,7 +303,7 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
-  it('flattens pasted list items into the current list', async () => {
+  it('merges pasted list items into the current list', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
       props: {
@@ -265,7 +328,7 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
-  it('flattens pasted markdown-style list text into the current list', async () => {
+  it('merges pasted markdown-style list text into the current list', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
       props: {

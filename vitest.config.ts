@@ -30,6 +30,14 @@ export default defineConfig({
         'src/plugin.ts',
         'src/env.d.ts',
       ],
+      // Regression floor: keep global coverage from silently dropping.
+      // Raise these as coverage improves; do not lower them.
+      thresholds: {
+        statements: 74,
+        branches: 63,
+        functions: 82,
+        lines: 78,
+      },
     },
   },
 })

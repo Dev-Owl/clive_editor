@@ -15,6 +15,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
 - [MarkdownViewer (Read-only)](#markdownviewer-read-only)
   - [MarkdownViewer Props](#markdownviewer-props)
   - [Borderless Example](#borderless-example)
+  - [Code Block Copy Button](#code-block-copy-button)
 - [Props](#props)
 - [Events](#events)
 - [v-model Bindings](#v-model-bindings)
@@ -122,12 +123,40 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 |---|---|---|---|
 | `modelValue` | `string` | *(required)* | Raw markdown string to render. Use with `v-model`. |
 | `bordered` | `boolean` | `true` | Show a border around the viewer. Set to `false` for borderless rendering. |
+| `codeCopyButton` | `boolean` | `true` | Show a copy-to-clipboard button on every code block. Set to `false` to hide it. |
+| `highlightOptions` | `HighlightOptions` | — | Enable Shiki syntax highlighting when the viewer is used standalone. Injected automatically inside `CliveEdit`. |
 
 ### Borderless Example
 
 ```vue
 <MarkdownViewer v-model="content" :bordered="false" />
 ```
+
+### Code Block Copy Button
+
+Every code block in the viewer carries a copy button that puts the block's content on the clipboard. It appears when the block is hovered or focused, confirms the copy for a moment, and is always visible on touch devices. Keyboard users reach it by tabbing to it.
+
+This is a viewer-only feature — the editor never shows it, so it can't be confused with editable content.
+
+```vue
+<!-- On by default -->
+<MarkdownViewer v-model="content" />
+
+<!-- Switched off -->
+<MarkdownViewer v-model="content" :code-copy-button="false" />
+```
+
+The button is styled with CSS variables like everything else:
+
+| Variable | Default | Description |
+|---|---|---|
+| `--ce-code-copy-bg` | `rgba(0, 0, 0, 0.06)` | Button background |
+| `--ce-code-copy-text` | `#6b7280` | Button icon colour |
+| `--ce-code-copy-hover-bg` | `rgba(0, 0, 0, 0.12)` | Button background on hover |
+| `--ce-code-copy-hover-text` | `#374151` | Button icon colour on hover |
+| `--ce-code-copy-done-text` | `#16a34a` | Icon colour while the copy is confirmed |
+
+Clipboard writes use the async Clipboard API and fall back to a selection-based copy on insecure origins (plain `http`).
 
 ---
 
@@ -811,6 +840,11 @@ CliveEdit uses CSS custom properties scoped under the `.cliveedit` class. Overri
 | `--ce-code-lang-bg` | `rgba(0, 0, 0, 0.06)` | Code block language label background |
 | `--ce-code-lang-text` | `#6b7280` | Code block language label text colour |
 | `--ce-code-lang-font-size` | `0.75em` | Code block language label font size |
+| `--ce-code-copy-bg` | `rgba(0, 0, 0, 0.06)` | Viewer code copy button background |
+| `--ce-code-copy-text` | `#6b7280` | Viewer code copy button icon colour |
+| `--ce-code-copy-hover-bg` | `rgba(0, 0, 0, 0.12)` | Viewer code copy button background on hover |
+| `--ce-code-copy-hover-text` | `#374151` | Viewer code copy button icon colour on hover |
+| `--ce-code-copy-done-text` | `#16a34a` | Viewer code copy button icon colour while confirming |
 | `--ce-blockquote-border` | `#6366f1` | Blockquote left border colour |
 | `--ce-blockquote-border-width` | `4px` | Blockquote left border width |
 | `--ce-blockquote-padding` | `4px 16px` | Blockquote padding |

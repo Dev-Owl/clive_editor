@@ -21,7 +21,7 @@ import {
   Undo2,
   Redo2,
 } from 'lucide-vue-next'
-import type { BuiltInToolbarItem, EditorContext, ToolbarAction, ToolbarItem } from '@/types'
+import type { BuiltInToolbarItem, EditorContext, ToolbarAction } from '@/types'
 
 type ToolbarConfig = Omit<BuiltInToolbarItem, 'action'>
 

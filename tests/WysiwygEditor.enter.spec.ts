@@ -277,6 +277,101 @@ describe('WysiwygEditor enter flows', () => {
     wrapper.unmount()
   })
 
+  it('starts a sibling item when Enter is pressed at the end of an item with a sub-list', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '-   Emails\n    -   See due\n-   Draak import\n    -   Re-download the db\n',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    const parentLi = Array.from(editor.element.querySelectorAll('li'))
+      .find((li) => li.firstChild?.textContent?.startsWith('Draak import'))!
+    const text = parentLi.firstChild!
+    setCollapsedSelection(text, 'Draak import'.length)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    // The sub-list stays with its parent item, the new item follows it
+    expect(parentLi.querySelectorAll(':scope > ul > li')).toHaveLength(1)
+    expect(parentLi.nextElementSibling?.tagName).toBe('LI')
+    expect(parentLi.nextElementSibling?.textContent?.trim()).toBe('')
+
+    const updates = wrapper.emitted('update:modelValue')
+    const markdown = updates?.[updates.length - 1]?.[0] as string
+    expect(markdown).not.toMatch(/-\s+-\s/)
+    expect(markdown).toContain('    -   Re-download the db')
+    wrapper.unmount()
+  })
+
+  it('splits an item with a sub-list without orphaning the nested items', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<ul><li>Draak import<ul><li>Re-download</li></ul></li></ul>'
+    const text = editor.element.querySelector('li')!.firstChild!
+    setCollapsedSelection(text, 'Draak'.length)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe(
+      '<ul><li>Draak<ul><li>Re-download</li></ul></li><li> import</li></ul>',
+    )
+
+    const updates = wrapper.emitted('update:modelValue')
+    expect(updates?.[updates.length - 1]?.[0]).not.toMatch(/-\s+-\s/)
+    wrapper.unmount()
+  })
+
+  it('pushes a list item down when Enter is pressed at its start', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<ul><li>Draak import<ul><li>Re-download</li></ul></li></ul>'
+    const text = editor.element.querySelector('li')!.firstChild!
+    setCollapsedSelection(text, 0)
+
+    await editor.trigger('keydown', { key: 'Enter' })
+    vi.runAllTimers()
+
+    expect(editor.element.innerHTML).toBe(
+      '<ul><li><br></li><li>Draak import<ul><li>Re-download</li></ul></li></ul>',
+    )
+    wrapper.unmount()
+  })
+
+  it('repairs marker-only list items coming from stored markdown', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '-   Draak import\n-   -   Re-download the db\n    -   Re-run the import\n',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    const topLevelItems = editor.element.querySelectorAll(':scope > ul > li')
+
+    expect(topLevelItems).toHaveLength(1)
+    expect(topLevelItems[0].firstChild?.textContent?.trim()).toBe('Draak import')
+    expect(
+      Array.from(topLevelItems[0].querySelectorAll(':scope > ul > li')).map((li) => li.textContent),
+    ).toEqual(['Re-download the db', 'Re-run the import'])
+    wrapper.unmount()
+  })
+
   it('starts the next list item without carrying inline formatting forward', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
