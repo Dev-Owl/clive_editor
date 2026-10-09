@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { FileCode, Eye } from 'lucide-vue-next'
+import { FileCode, Eye } from '@lucide/vue'
 import { defaultToolbarItems } from '@/commands'
 import type { ToolbarItem, BuiltInToolbarItem, ToolbarAction, EditorContext, EditorMode } from '@/types'
 

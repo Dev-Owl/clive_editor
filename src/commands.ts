@@ -20,7 +20,7 @@ import {
   Printer,
   Undo2,
   Redo2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { BuiltInToolbarItem, EditorContext, ToolbarAction } from '@/types'
 
 type ToolbarConfig = Omit<BuiltInToolbarItem, 'action'>

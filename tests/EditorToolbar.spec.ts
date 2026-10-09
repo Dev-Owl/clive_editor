@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { Bold, Printer, Smile } from 'lucide-vue-next'
+import { Bold, Printer, Smile } from '@lucide/vue'
 import { describe, expect, it, vi } from 'vitest'
 import EditorToolbar from '@/components/EditorToolbar.vue'
 import type { EditorContext, ToolbarItem } from '@/types'

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { CalendarClock } from 'lucide-vue-next'
+import { CalendarClock } from '@lucide/vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import CliveEdit from '@/components/CliveEdit.vue'
 import * as printUtil from '@/utils/print'

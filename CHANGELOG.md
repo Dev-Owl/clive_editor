@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.3
+Pure maintenance release and cleaning of deprecated functions. No functional changes included.
+
 ## 0.2.2
 
 TLDR: Adds a copy button to code blocks in the viewer, and fixes list editing — editing or pasting inside an existing list no longer corrupts its structure (`-   -   item`).

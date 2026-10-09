@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { Bold, CalendarClock } from 'lucide-vue-next'
+import { Bold, CalendarClock } from '@lucide/vue'
 import { defineComponent, nextTick, ref, type Ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ToolbarItem } from '@/types'
@@ -399,13 +399,12 @@ describe('CliveEdit orchestration integration', () => {
     })
 
     const editor = wrapper.get('.ce-wysiwyg').element as HTMLElement
-    Object.defineProperty(document, 'execCommand', {
-      configurable: true,
-      value: vi.fn((_command: string, _showUi: boolean, value?: string) => {
-        editor.textContent = `${editor.textContent ?? ''}${value ?? ''}`
-        return true
-      }),
-    })
+    const range = document.createRange()
+    range.setStart(editor, 0)
+    range.collapse(true)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    editor.dispatchEvent(new Event('keyup'))
 
     await settle()
     await wrapper.get('button[aria-label="Emoji"]').trigger('click')

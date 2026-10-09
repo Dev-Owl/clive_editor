@@ -22,7 +22,7 @@ export default defineConfig({
       formats: ['es', 'umd'],
       fileName: (format) => `cliveedit.${format}.js`,
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ['vue', 'shiki', 'emoji-picker-element'],
       output: {
         globals: {

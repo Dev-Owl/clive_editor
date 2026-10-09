@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { CalendarClock } from 'lucide-vue-next'
+import { CalendarClock } from '@lucide/vue'
 import { defineComponent, nextTick, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import CliveEdit from '@/components/CliveEdit.vue'
@@ -32,13 +32,12 @@ describe('CliveEdit visual mode integration', () => {
     })
 
     const editor = wrapper.get('.ce-wysiwyg').element as HTMLElement
-    Object.defineProperty(document, 'execCommand', {
-      configurable: true,
-      value: vi.fn((_command: string, _showUi: boolean, value?: string) => {
-        editor.textContent = `${editor.textContent ?? ''}${value ?? ''}`
-        return true
-      }),
-    })
+    const range = document.createRange()
+    range.setStart(editor, 0)
+    range.collapse(true)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    editor.dispatchEvent(new Event('keyup'))
 
     await wrapper.get('button[aria-label="Insert Date/Time"]').trigger('click')
     await nextTick()
@@ -72,13 +71,12 @@ describe('CliveEdit visual mode integration', () => {
     })
 
     const editor = wrapper.get('.ce-wysiwyg').element as HTMLElement
-    Object.defineProperty(document, 'execCommand', {
-      configurable: true,
-      value: vi.fn((_command: string, _showUi: boolean, value?: string) => {
-        editor.textContent = `${editor.textContent ?? ''}${value ?? ''}`
-        return true
-      }),
-    })
+    const range = document.createRange()
+    range.setStart(editor, 0)
+    range.collapse(true)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    editor.dispatchEvent(new Event('keyup'))
 
     await wrapper.get('button[aria-label="Insert Literal Markdown"]').trigger('click')
     await nextTick()

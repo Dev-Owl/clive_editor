@@ -43,7 +43,7 @@ import { useEmojiPicker } from '@/composables/useEmojiPicker'
 import { getHeadingAction, runMarkdownCommand, runWysiwygCommand } from '@/commands'
 import { parseMarkdown } from '@/utils/markdown'
 import { printMarkdown } from '@/utils/print'
-import { insertHtmlAtCursor, saveSelection, restoreSelection } from '@/utils/selection'
+import { insertHtmlAtCursor, insertTextAtCursor as insertPlainTextAtCursor, saveSelection, restoreSelection } from '@/utils/selection'
 import type { SavedSelection } from '@/utils/selection'
 import type {
   CliveEditProps,
@@ -362,7 +362,7 @@ function onEmojiSelect(unicode: string): void {
       emojiSavedSelection = null
     }
     // Insert as a plain text character (like typing it)
-    document.execCommand('insertText', false, unicode)
+    insertPlainTextAtCursor(unicode)
     // Sync to markdown
     nextTick(() => {
       const md = wysiwygRef.value?.syncToMarkdown()
@@ -385,7 +385,7 @@ function insertTextAtCursor(text: string): void {
 
   if (currentMode.value === 'wysiwyg') {
     restoreWysiwygSelection()
-    document.execCommand('insertText', false, text)
+    insertPlainTextAtCursor(text)
     syncWysiwygToMarkdown()
   } else {
     pendingImmediateMarkdownHistory = true

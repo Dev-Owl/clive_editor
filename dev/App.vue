@@ -100,7 +100,7 @@ import {
   Redo2,
   Smile,
   CalendarClock,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import readmeContent from '../README.md?raw'
 
 /* ---- State ---- */
