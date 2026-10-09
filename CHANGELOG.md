@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.5
+
+TLDR: Security release — a crafted code block could run script in the reader's browser. Update if you render markdown written by other users. Affects 0.1.4 – 0.2.4.
+
+### Fixed
+
+- **Cross-site scripting through the code block language (security).** The language written after the opening fence (e.g. ` ```ts `) was put into the label's `data-lang` attribute without escaping. A fence such as ` ```"><img src=x onerror=…> ` therefore created a live element with an event handler, and the script ran as soon as the markdown was shown — in `MarkdownViewer`, in Visual mode of `CliveEdit` and in the print view, with or without syntax highlighting. The language is now escaped like every other value in the rendered HTML. Introduced in 0.1.4 with the syntax highlighter; 0.1.0 – 0.1.3 are not affected.
+- **`$` in a code block language garbled highlighted output.** With a highlighter configured, the label was spliced into Shiki's HTML through a replacement string, so sequences such as `$&` or `$1` in the language were expanded instead of kept literally. The label is now inserted with a replacer function.
+
+### Internal
+
+- Added XSS regression tests for crafted fence info strings in `parseMarkdown` (with and without a highlighter), `MarkdownViewer` and the WYSIWYG editor.
+
 ## 0.2.4
 
 TLDR: Bug-fix release — an emptied code block in Visual mode can be clicked into and edited again.

@@ -62,7 +62,8 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
 
     // Language label HTML (positioned via CSS)
     const displayLang = lang || 'plain text'
-    const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${lang}">${escapeHtmlStr(displayLang)}</div>`
+    // The info string is author-controlled: escape it like every other value
+    const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeHtmlStr(lang)}">${escapeHtmlStr(displayLang)}</div>`
 
     // Try syntax highlighting
     if (highlight && lang) {
@@ -71,9 +72,12 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
         // Shiki returns a complete <pre><code>…</code></pre> block.
         // We need to inject our language label inside the <pre> and add
         // the language class to the <code> element.
+        // A replacer function, so `$` sequences in the language are not
+        // read as replacement patterns
         const withClass = highlighted.replace(
           /(<pre[^>]*>)\s*(<code)/,
-          `$1${langLabel}<code class="language-${escapeAttrStr(lang)}"`,
+          (_match, preOpen: string) =>
+            `${preOpen}${langLabel}<code class="language-${escapeAttrStr(lang)}"`,
         )
         return withClass
       }

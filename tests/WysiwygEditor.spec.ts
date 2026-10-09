@@ -14,6 +14,20 @@ describe('WysiwygEditor keyboard flows', () => {
     window.getSelection()?.removeAllRanges()
   })
 
+  it('does not render markup injected through a code block language', () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '~~~x" onmouseover="alert(1)\ncode\n~~~',
+      },
+    })
+
+    expect(wrapper.find('[onmouseover]').exists()).toBe(false)
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect((wrapper.get('.ce-code-lang').element as HTMLElement).dataset.lang).toBe('x" onmouseover="alert(1)')
+    wrapper.unmount()
+  })
+
   it('emits indent and outdent actions when tabbing inside a list item', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
