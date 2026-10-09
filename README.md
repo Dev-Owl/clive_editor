@@ -365,7 +365,7 @@ Example: append application-specific buttons to the built-in toolbar and use bot
 import { ref } from 'vue'
 import { CliveEdit, defaultToolbarItems } from '@dev_owl/cliveedit'
 import type { ToolbarItem } from '@dev_owl/cliveedit'
-import { CalendarClock } from 'lucide-vue-next'
+import { CalendarClock } from '@lucide/vue'
 
 const content = ref('')
 
@@ -413,7 +413,7 @@ Example: build a smaller toolbar from built-in actions only.
 import { ref } from 'vue'
 import { CliveEdit } from '@dev_owl/cliveedit'
 import type { ToolbarItem } from '@dev_owl/cliveedit'
-import { Bold, Italic, Heading1, Link, Undo2, Redo2 } from 'lucide-vue-next'
+import { Bold, Italic, Heading1, Link, Undo2, Redo2 } from '@lucide/vue'
 
 const content = ref('')
 

@@ -107,6 +107,7 @@ defineExpose({
       editorEl.value.innerHTML = html
       applyImageSizingMetadata(editorEl.value)
       normalizeListStructure()
+      normalizeCodeBlocks()
       isSyncing = false
       clearImageSelection()
     }
@@ -131,6 +132,7 @@ defineExpose({
       highlight: props.highlight,
     })
     normalizeListStructure()
+    normalizeCodeBlocks()
     isSyncing = false
     clearImageSelection()
   },
@@ -149,6 +151,7 @@ onMounted(() => {
     // Heal documents that already contain marker-only list items so the
     // visual list renders at the levels the author intended
     normalizeListStructure()
+    normalizeCodeBlocks()
   }
   // Listen for modifier keys to show clickable-link cursor hint
   window.addEventListener('keydown', onModifierDown)
@@ -285,6 +288,7 @@ watch(
       })
       applyImageSizingMetadata(editorEl.value)
       normalizeListStructure()
+      normalizeCodeBlocks()
       isSyncing = false
     }
   },
@@ -444,30 +448,7 @@ function onInput(event?: Event): void {
     }, 300)
   }
 
-  // Repair any <pre> blocks where the browser removed the <code> element
-  // (happens when the user deletes all content — the lang label div keeps
-  // the <pre> alive visually but <code> is gone).
-  if (editorEl.value) {
-    for (const pre of editorEl.value.querySelectorAll('pre')) {
-      if (!pre.querySelector('code')) {
-        const labelEl = pre.querySelector('.ce-code-lang')
-        const lang = (labelEl as HTMLElement)?.dataset?.lang ?? ''
-        const codeEl = document.createElement('code')
-        if (lang) codeEl.className = `language-${lang}`
-        codeEl.appendChild(document.createTextNode(''))
-        pre.appendChild(codeEl)
-        // Place cursor inside the restored <code>
-        const sel = window.getSelection()
-        if (sel) {
-          const range = document.createRange()
-          range.selectNodeContents(codeEl)
-          range.collapse(true)
-          sel.removeAllRanges()
-          sel.addRange(range)
-        }
-      }
-    }
-  }
+  normalizeCodeBlocks({ placeCaret: true })
 
   // Debounced emit of markdown value
   if (inputTimer) clearTimeout(inputTimer)
@@ -1402,9 +1383,75 @@ function getSerializableCodeText(codeEl: HTMLElement): string {
 }
 
 function setCodeBlockText(codeEl: HTMLElement, text: string): void {
-  codeEl.textContent = text.endsWith('\n')
+  // An empty <code> has no line box, so the block collapses and can no longer
+  // be clicked into — keep the caret sentinel as its only character instead.
+  codeEl.textContent = text === '' || text.endsWith('\n')
     ? `${text}${CODE_BLOCK_TRAILING_CARET_SENTINEL}`
     : text
+}
+
+/**
+ * Keep every code block editable: restore a <code> element the browser
+ * removed, and give an empty one the caret sentinel so it keeps a line box.
+ * With `placeCaret`, a caret inside a repaired block is moved into its <code>.
+ */
+function normalizeCodeBlocks(options?: { placeCaret?: boolean }): void {
+  if (!editorEl.value) return
+  const sel = window.getSelection()
+
+  for (const pre of editorEl.value.querySelectorAll('pre')) {
+    let codeEl = pre.querySelector('code')
+    const missingCode = !codeEl
+    if (!codeEl) {
+      const labelEl = pre.querySelector<HTMLElement>('.ce-code-lang')
+      const lang = labelEl?.dataset?.lang ?? ''
+      codeEl = document.createElement('code')
+      if (lang) codeEl.className = `language-${lang}`
+      pre.appendChild(codeEl)
+    }
+    if (!missingCode && codeEl.textContent !== '') {
+      removeStrayCodeCaretSentinels(codeEl)
+      continue
+    }
+
+    setCodeBlockText(codeEl, '')
+
+    const caretInBlock = !!sel && sel.rangeCount > 0 && !!sel.anchorNode && pre.contains(sel.anchorNode)
+    if (options?.placeCaret && sel && (missingCode || caretInBlock)) {
+      restoreCursorInCode(codeEl, 0, sel)
+    }
+  }
+}
+
+/**
+ * Text inserted natively (IME, autocorrect, mobile keyboards) can land on
+ * either side of the caret sentinel. Drop every sentinel except one that is
+ * the sole content or trails a final newline, so none leaks into markdown.
+ * `deleteData` keeps the live selection range adjusted.
+ */
+function removeStrayCodeCaretSentinels(codeEl: HTMLElement): void {
+  const text = codeEl.textContent ?? ''
+  if (!text.includes(CODE_BLOCK_TRAILING_CARET_SENTINEL)) return
+
+  const keepIndex = text === CODE_BLOCK_TRAILING_CARET_SENTINEL
+    || text.endsWith(`\n${CODE_BLOCK_TRAILING_CARET_SENTINEL}`)
+    ? text.length - 1
+    : -1
+
+  const walker = document.createTreeWalker(codeEl, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text)
+
+  let nodeStart = 0
+  for (const node of textNodes) {
+    const original = node.data
+    for (let i = original.length - 1; i >= 0; i--) {
+      if (original[i] === CODE_BLOCK_TRAILING_CARET_SENTINEL && nodeStart + i !== keepIndex) {
+        node.deleteData(i, 1)
+      }
+    }
+    nodeStart += original.length
+  }
 }
 
 function findTrailingCodeCaretSentinel(codeEl: HTMLElement): Text | null {
