@@ -261,6 +261,69 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('keeps a code block editable after deleting its last character', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><div class="ce-code-lang" contenteditable="false" data-lang="">plain text</div><code>x</code></pre>'
+    setCollapsedSelection(editor.element.querySelector('code')!.firstChild!, 1)
+
+    await editor.trigger('keydown', { key: 'Backspace' })
+    vi.runAllTimers()
+
+    // The sentinel gives the empty <code> a line box so it can still be clicked
+    const codeEl = editor.element.querySelector('code')!
+    expect(codeEl.textContent).toBe('​')
+    expect(codeEl.contains(window.getSelection()!.anchorNode)).toBe(true)
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('```\n\n```')
+
+    await editor.trigger('keydown', { key: 'a' })
+    vi.runAllTimers()
+
+    expect(codeEl.textContent).toBe('a')
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('```\na\n```')
+    wrapper.unmount()
+  })
+
+  it('gives an empty code block loaded from markdown a caret line', () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '```js\n```',
+      },
+    })
+
+    expect(wrapper.get('.ce-wysiwyg code').element.textContent).toBe('​')
+    wrapper.unmount()
+  })
+
+  it('drops a caret sentinel that natively inserted text lands behind', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '',
+      },
+    })
+
+    const editor = wrapper.get('.ce-wysiwyg')
+    editor.element.innerHTML = '<pre><code>​let x</code></pre>'
+    const codeText = editor.element.querySelector('code')!.firstChild!
+    setCollapsedSelection(codeText, 6)
+
+    await editor.trigger('input')
+    vi.runAllTimers()
+
+    expect(codeText.textContent).toBe('let x')
+    expect(window.getSelection()!.anchorOffset).toBe(5)
+    expect(wrapper.emitted('update:modelValue')?.slice(-1)[0]?.[0]).toBe('```\nlet x\n```')
+    wrapper.unmount()
+  })
+
   it('exits a root-level empty list item into a paragraph on Enter', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,

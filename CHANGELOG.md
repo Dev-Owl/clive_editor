@@ -2,8 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.4
+
+TLDR: Bug-fix release — an emptied code block in Visual mode can be clicked into and edited again.
+
+### Fixed
+
+- **Emptied code block could no longer be clicked into.** Deleting the last character of a code block in Visual mode left an empty `<code>` element without a line box, so the block collapsed to its padding and the caret could not be placed inside it — the only way back was a round-trip through Markdown mode. An empty code block now keeps an invisible caret placeholder (U+200B) as its only character, so it stays clickable and typeable. The placeholder is never written to the markdown. Empty fenced blocks loaded from markdown get the same treatment.
+- **Natively inserted text could pick up a zero-width space in code blocks.** Text that reaches a code block without a `keydown` (IME composition, autocorrect, mobile keyboards) could land on either side of the caret placeholder, which then ended up inside the code. Stray placeholders are now removed on input while the caret position is preserved.
+
+### Docs
+
+- README examples import icons from `@lucide/vue` instead of the deprecated `lucide-vue-next`.
+
+### Internal
+
+- New `normalizeCodeBlocks()` pass in the WYSIWYG editor, run after every render and on input. It replaces the narrower repair that only restored a `<code>` element the browser had removed.
+- Added unit regression tests for deleting the last character, loading an empty fence, and stray-placeholder cleanup.
+
 ## 0.2.3
-Pure maintenance release and cleaning of deprecated functions. No functional changes included.
+
+TLDR: Pure maintenance release — dependency updates and removal of deprecated APIs. No functional changes included.
+
+### Changed
+
+- **Icons now come from `@lucide/vue`.** `lucide-vue-next` is deprecated upstream; the icons are identical. Consumers passing their own lucide icons to `toolbarItems` can keep using either package.
+- **Text insertion no longer uses `document.execCommand('insertText')`.** Emoji and custom-button text insertion in Visual mode now go through the Range API like the rest of the editor. Undo/Redo are unaffected (the editor keeps its own history).
+
+### Internal
+
+- Updated the toolchain: Vite 8, Vitest 5, jsdom 30, markdown-it 15, Shiki 4, plus current minor versions of Vue, vue-tsc, `@vitejs/plugin-vue`, `@vue/test-utils`, Playwright and turndown. TypeScript stays on 5.9 (vue-tsc does not support the TypeScript 7 native compiler yet).
+- Dropped `@types/markdown-it` — markdown-it 15 ships its own types.
+- `build.rollupOptions` → `build.rolldownOptions` (deprecated in Vite 8).
+- CI now builds on Node 24 (Node 20 is end-of-life) with current major versions of the GitHub Pages actions; added `.nvmrc`.
+- Tests that mocked `execCommand` now place a real caret instead.
 
 ## 0.2.2
 
