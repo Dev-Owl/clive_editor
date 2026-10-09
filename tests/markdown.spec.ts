@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseMarkdown, serializeHtml } from '@/utils/markdown'
 
@@ -5,6 +7,63 @@ describe('markdown utils', () => {
   it('adds heading anchor ids when parsing markdown', () => {
     const html = parseMarkdown('# Hello World')
     expect(html).toContain('<h1 id="hello-world">Hello World</h1>')
+  })
+
+  describe('heading anchor ids', () => {
+    const ids = (markdown: string) => {
+      const container = document.createElement('div')
+      container.innerHTML = parseMarkdown(markdown)
+      return Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6')).map((h) => h.id)
+    }
+
+    it('numbers repeated headings like GitHub', () => {
+      expect(ids('## Installation\n\n## Usage\n\n## Installation\n\n## Installation'))
+        .toEqual(['installation', 'usage', 'installation-1', 'installation-2'])
+    })
+
+    it('skips numbers that are already taken by another heading', () => {
+      expect(ids('## Intro-1\n\n## Intro\n\n## Intro')).toEqual(['intro-1', 'intro', 'intro-2'])
+    })
+
+    it('starts numbering again for every rendered document', () => {
+      expect(ids('## Setup')).toEqual(['setup'])
+      expect(ids('## Setup')).toEqual(['setup'])
+    })
+
+    it('turns every space into a hyphen after removing punctuation', () => {
+      expect(ids('## EditorContext (Provide / Inject)\n\n## Image Paste & Drop'))
+        .toEqual(['editorcontext-provide--inject', 'image-paste--drop'])
+    })
+
+    it('keeps letters of every script', () => {
+      expect(ids('## Über uns\n\n## Café olé\n\n## Привет мир')).toEqual(['über-uns', 'café-olé', 'привет-мир'])
+    })
+
+    it('uses the visible text of links and inline code', () => {
+      expect(ids('## See [the docs](https://example.com/x_y)\n\n## The `sanitize` prop'))
+        .toEqual(['see-the-docs', 'the-sanitize-prop'])
+    })
+
+    it('slugs typographer dashes like the source text', () => {
+      expect(ids('## Before -- after\n\n## One --- two')).toEqual(['before----after', 'one-----two'])
+    })
+
+    it('adds no id when a heading has no letters or digits', () => {
+      expect(ids('## !!!')).toEqual([''])
+    })
+
+    it('resolves every in-page link of the README', () => {
+      const readme = readFileSync(resolve(__dirname, '../README.md'), 'utf8')
+      const container = document.createElement('div')
+      container.innerHTML = parseMarkdown(readme)
+
+      const targets = Array.from(container.querySelectorAll('a[href^="#"]'))
+        .map((a) => decodeURIComponent(a.getAttribute('href')!.slice(1)))
+      const missing = targets.filter((id) => !container.querySelector(`[id="${CSS.escape(id)}"]`))
+
+      expect(targets.length).toBeGreaterThan(40)
+      expect(missing).toEqual([])
+    })
   })
 
   it('preserves nested list structure through markdown to html to markdown roundtrip', () => {

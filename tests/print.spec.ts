@@ -88,6 +88,35 @@ describe('printMarkdown', () => {
     expect(doc?.body.textContent).toContain('Some text')
   })
 
+  it('sandboxes the print view so its content cannot run script', () => {
+    const iframe = printMarkdown('# Print me')
+
+    const sandbox = iframe?.getAttribute('sandbox')?.split(' ') ?? []
+    expect(sandbox).toEqual(expect.arrayContaining(['allow-same-origin', 'allow-modals']))
+    expect(sandbox).not.toContain('allow-scripts')
+  })
+
+  it('prints once, after the content is written', async () => {
+    const printed: string[] = []
+    const originalAppend = document.body.appendChild.bind(document.body)
+    vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
+      const result = originalAppend(node)
+      if (node instanceof HTMLIFrameElement && node.contentWindow) {
+        const frame = node
+        frame.contentWindow!.print = () => {
+          printed.push(frame.contentDocument?.body.textContent?.trim() ?? '')
+        }
+      }
+      return result
+    })
+
+    printMarkdown('# Heading')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(printed).toEqual(['Heading'])
+    vi.restoreAllMocks()
+  })
+
   it('returns null when there is no document (SSR guard)', () => {
     const original = globalThis.document
     // Simulate a non-DOM environment.

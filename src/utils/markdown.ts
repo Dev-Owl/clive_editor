@@ -2,20 +2,27 @@
 /*  markdown.ts — thin wrappers around markdown-it & turndown          */
 /* ================================================================== */
 
-import MarkdownIt, { type MarkdownIt as MarkdownItInstance } from 'markdown-it'
+import MarkdownIt, { type Env, type MarkdownIt as MarkdownItInstance, type Token } from 'markdown-it'
 import TurndownService from 'turndown'
 import {
   applyImageSizingMetadata,
   createImageMarkdownTitle,
   getImageWidth,
 } from './imageSizing'
+import { escapeHtml } from './escape'
 import { isListWrapperOnlyItem } from './lists'
+import { sanitizeRenderedHtml, type SanitizeFn } from './renderSanitizer'
 
 /* ---------- Types ---------- */
 
 export interface ParseMarkdownOptions {
   /** Optional highlight function: receives (code, lang) and returns highlighted HTML or '' */
   highlight?: (code: string, lang: string) => string
+  /**
+   * Final sanitiser for the rendered HTML (default: DOMPurify via
+   * `sanitizeRenderedHtml`). Replace it to use your own policy.
+   */
+  sanitize?: SanitizeFn
 }
 
 /* ---------- markdown-it (MD → HTML) ---------- */
@@ -42,9 +49,9 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
   md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx]
     const contentToken = tokens[idx + 1]
-    if (contentToken?.type === 'inline' && contentToken.content) {
-      const slug = slugify(contentToken.content)
-      token.attrSet('id', slug)
+    if (contentToken?.type === 'inline') {
+      const slug = uniqueSlug(slugify(headingText(contentToken)), env)
+      if (slug) token.attrSet('id', slug)
     }
     return defaultHeadingOpen(tokens, idx, options, env, self)
   }
@@ -63,7 +70,7 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
     // Language label HTML (positioned via CSS)
     const displayLang = lang || 'plain text'
     // The info string is author-controlled: escape it like every other value
-    const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeHtmlStr(lang)}">${escapeHtmlStr(displayLang)}</div>`
+    const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeHtml(lang)}">${escapeHtml(displayLang)}</div>`
 
     // Try syntax highlighting
     if (highlight && lang) {
@@ -77,15 +84,15 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
         const withClass = highlighted.replace(
           /(<pre[^>]*>)\s*(<code)/,
           (_match, preOpen: string) =>
-            `${preOpen}${langLabel}<code class="language-${escapeAttrStr(lang)}"`,
+            `${preOpen}${langLabel}<code class="language-${escapeHtml(lang)}"`,
         )
         return withClass
       }
     }
 
     // Fallback: plain code block with language label
-    const langClass = lang ? ` class="language-${escapeAttrStr(lang)}"` : ''
-    return `<pre>${langLabel}<code${langClass}>${escapeHtmlStr(code)}</code></pre>\n`
+    const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : ''
+    return `<pre>${langLabel}<code${langClass}>${escapeHtml(code)}</code></pre>\n`
   }
 
   return md
@@ -117,28 +124,51 @@ function getMdInstance(highlight?: (code: string, lang: string) => string): Mark
 /* ---------- helpers ---------- */
 
 /**
- * Generate a URL-friendly slug from heading text.
- * Matches GitHub-style anchor generation.
+ * The visible text of a heading, as GitHub derives anchors from it: link
+ * targets and markup are left out, inline code is kept.
+ */
+function headingText(inline: Token): string {
+  return (inline.children ?? [])
+    .filter((child) => child.type === 'text' || child.type === 'code_inline')
+    .map((child) => child.content)
+    .join('')
+    // Undo the typographer's dashes so `a -- b` slugs like the source text
+    .replace(/\u2014/g, '---')
+    .replace(/\u2013/g, '--')
+}
+
+/**
+ * Generate a URL-friendly slug from heading text, like GitHub does:
+ * lower-case, punctuation removed (letters of every script are kept),
+ * and every single space turned into a hyphen.
  */
 function slugify(text: string): string {
   return text
-    .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '')   // strip non-word chars (except spaces & dashes)
-    .replace(/\s+/g, '-')       // spaces → hyphens
-    .replace(/-+/g, '-')        // collapse consecutive hyphens
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
+    .replace(/ /g, '-')
 }
 
-function escapeHtmlStr(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
+/**
+ * Make a slug unique within one rendered document: repeated headings get
+ * `-1`, `-2`, … in document order, like GitHub.
+ */
+function uniqueSlug(slug: string, env: Env | undefined): string {
+  if (!slug || !env) return slug
 
-function escapeAttrStr(str: string): string {
-  return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  const seen = (env.headingSlugs ??= new Map<string, number>()) as Map<string, number>
+  let result = slug
+  if (seen.has(slug)) {
+    let count = seen.get(slug)!
+    do {
+      count++
+      result = `${slug}-${count}`
+    } while (seen.has(result))
+    seen.set(slug, count)
+  }
+  seen.set(result, 0)
+  return result
 }
 
 function escapeMarkdownTitle(str: string): string {
@@ -149,12 +179,14 @@ function escapeMarkdownTitle(str: string): string {
  * Parse a markdown string into an HTML string.
  *
  * @param markdown  Raw markdown source
- * @param options   Optional: pass a `highlight` function for syntax highlighting
+ * @param options   Optional: a `highlight` function for syntax highlighting and
+ *                  a `sanitize` function that replaces the default sanitiser
  */
 export function parseMarkdown(markdown: string, options?: ParseMarkdownOptions): string {
   const md = getMdInstance(options?.highlight)
-  const html = md.render(sanitizeMarkdownTables(markdown))
-  return applyRenderedImageSizing(restoreRichTableCells(restoreSerializedBlankLines(html)))
+  const html = md.render(sanitizeMarkdownTables(markdown), {})
+  const sanitize = options?.sanitize ?? sanitizeRenderedHtml
+  return sanitize(applyRenderedImageSizing(restoreRichTableCells(restoreSerializedBlankLines(html))))
 }
 
 /**

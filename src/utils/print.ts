@@ -7,6 +7,7 @@
 /*  that iframe. The iframe is removed once printing finishes.          */
 /* ================================================================== */
 
+import { escapeHtml } from './escape'
 import { parseMarkdown, type ParseMarkdownOptions } from './markdown'
 
 export interface PrintOptions extends ParseMarkdownOptions {
@@ -35,13 +36,6 @@ function collectDocumentStyles(): string {
       return node.outerHTML
     })
     .join('\n')
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
 }
 
 /**
@@ -127,6 +121,11 @@ export function printMarkdown(markdown: string, options?: PrintOptions): HTMLIFr
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
+  // No `allow-scripts`: nothing inside the print view can run script, even
+  // if something slipped past the sanitiser. `allow-same-origin` lets us
+  // write the document and inherit the stylesheets, `allow-modals` lets the
+  // print dialog open.
+  iframe.setAttribute('sandbox', 'allow-same-origin allow-modals')
   iframe.style.position = 'fixed'
   iframe.style.right = '0'
   iframe.style.bottom = '0'
@@ -160,11 +159,10 @@ export function printMarkdown(markdown: string, options?: PrintOptions): HTMLIFr
       return
     }
 
-    // Fallback cleanup for browsers that never fire `afterprint`.
-    win.setTimeout(cleanup, 60_000)
+    // Fallback cleanup for browsers that never fire `afterprint`. Scheduled
+    // on the host window: timers of the sandboxed print document never run.
+    window.setTimeout(cleanup, 60_000)
   }
-
-  iframe.addEventListener('load', triggerPrint)
 
   document.body.appendChild(iframe)
 
@@ -178,6 +176,15 @@ export function printMarkdown(markdown: string, options?: PrintOptions): HTMLIFr
   doc.open()
   doc.write(buildPrintDocument(markdown, options))
   doc.close()
+
+  // Listen only now: the initial about:blank document fires `load` while the
+  // iframe is appended, which used to open a print dialog for an empty page.
+  // Waiting for this `load` also lets copied stylesheets finish loading.
+  if (doc.readyState === 'complete') {
+    triggerPrint()
+  } else {
+    iframe.addEventListener('load', triggerPrint, { once: true })
+  }
 
   return iframe
 }

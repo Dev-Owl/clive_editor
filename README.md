@@ -36,7 +36,7 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
   - [Basic Usage](#basic-usage-1)
   - [Options](#options)
   - [How It Works](#how-it-works-1)
-- [Image Paste & Drop](#image-paste-drop)
+- [Image Paste & Drop](#image-paste--drop)
   - [Default Behaviour (Base64)](#default-behaviour-base64)
   - [Visual Resize Controls](#visual-resize-controls)
   - [Custom Upload Handler](#custom-upload-handler)
@@ -48,6 +48,9 @@ CliveEdit gives your users a rich editing experience with a familiar toolbar whi
 - [Theming](#theming)
   - [CSS Custom Properties](#css-custom-properties)
   - [Dark Theme Example](#dark-theme-example)
+- [Security](#security)
+  - [Custom Sanitiser](#custom-sanitiser)
+  - [Server-Side Rendering](#server-side-rendering)
 - [Vue Plugin (Global Registration)](#vue-plugin-global-registration)
 - [Advanced Usage](#advanced-usage)
   - [EditorContext (Provide / Inject)](#editorcontext-provide--inject)
@@ -70,6 +73,8 @@ npm install @dev_owl/cliveedit
 ```
 
 **Peer dependency:** Vue 3.3 or higher.
+
+The runtime dependencies `markdown-it`, `turndown` and `dompurify` are installed automatically, so your `npm audit` and Dependabot see them and you can update them independently of CliveEdit.
 
 ```bash
 npm install vue@^3.5
@@ -125,6 +130,7 @@ The viewer renders markdown to styled HTML using the same theming system as the 
 | `bordered` | `boolean` | `true` | Show a border around the viewer. Set to `false` for borderless rendering. |
 | `codeCopyButton` | `boolean` | `true` | Show a copy-to-clipboard button on every code block. Set to `false` to hide it. |
 | `highlightOptions` | `HighlightOptions` | — | Enable Shiki syntax highlighting when the viewer is used standalone. Injected automatically inside `CliveEdit`. |
+| `sanitize` | `(html: string) => string` | DOMPurify | Replace the sanitiser the rendered HTML passes through. See [Security](#security). |
 
 ### Borderless Example
 
@@ -175,6 +181,7 @@ Clipboard writes use the async Clipboard API and fall back to a selection-based 
 | `emojiPicker` | `boolean \| EmojiPickerOptions` | `undefined` | Enable the emoji picker toolbar button via [emoji-picker-element](https://github.com/nolanlawson/emoji-picker-element). Pass `true` for defaults or an options object. See [Emoji Picker](#emoji-picker). |
 | `onImageUpload` | `(file: File) => Promise<string>` | `undefined` | Called when an image is pasted or dropped. Return a URL. If not provided, images are embedded as base64. See [Image Paste & Drop](#image-paste--drop). |
 | `maxImageSize` | `number` | `2097152` (2 MB) | Maximum image file size in bytes. Images exceeding this are ignored. |
+| `sanitize` | `(html: string) => string` | DOMPurify | Replace the sanitiser the rendered HTML passes through (editor, inserted markdown, print view). See [Security](#security). |
 
 ---
 
@@ -908,6 +915,45 @@ You can also use `@media (prefers-color-scheme: dark)` for automatic dark mode:
 
 ---
 
+## Security
+
+CliveEdit is built to display markdown written by other people. Every piece of HTML it renders passes through a sanitiser before it reaches the page: the `MarkdownViewer`, the visual editor, markdown inserted through the editor context, syntax-highlighted code, and the print view.
+
+- **Default sanitiser:** [DOMPurify](https://github.com/cure53/DOMPurify) with an allowlist for what the editor renders (code block labels, image sizes, table alignment, Shiki colours, heading anchors). Scripts, event handlers and `javascript:` links are removed. CliveEdit uses a private DOMPurify instance, so its settings never affect DOMPurify in your own code.
+- **Raw HTML in markdown** is not rendered at all; it shows up as text.
+- **Print view:** printing happens in a sandboxed iframe that cannot run script.
+- **Defence in depth:** we recommend a Content Security Policy without `'unsafe-inline'` in `script-src` on pages that show user content.
+
+The default sanitiser is exported as `sanitizeRenderedHtml` if you want to use it elsewhere.
+
+### Custom Sanitiser
+
+Pass `sanitize` to use your own policy. It receives the rendered HTML and returns the HTML to insert. Wrapping the default keeps its protection:
+
+```vue
+<script setup lang="ts">
+import { CliveEdit, MarkdownViewer, sanitizeRenderedHtml } from '@dev_owl/cliveedit'
+
+// Example: additionally drop all images from the rendered output
+function sanitize(html: string): string {
+  return sanitizeRenderedHtml(html).replace(/<img\b[^>]*>/g, '')
+}
+</script>
+
+<template>
+  <CliveEdit v-model="markdown" :sanitize="sanitize" />
+  <MarkdownViewer v-model="markdown" :sanitize="sanitize" />
+</template>
+```
+
+A custom function replaces the default completely. If it does not sanitise, nothing does.
+
+### Server-Side Rendering
+
+DOMPurify needs a DOM. During server-side rendering the default sanitiser cannot run and returns the HTML unchanged, so the server-rendered page contains unsanitised output. If you render untrusted markdown on the server, pass a server-capable `sanitize` function, for example one based on [isomorphic-dompurify](https://github.com/kkomelin/isomorphic-dompurify).
+
+---
+
 ## Vue Plugin (Global Registration)
 
 Instead of importing `CliveEdit` in every component, you can register it globally:
@@ -1150,6 +1196,7 @@ import type {
   HighlightOptions,
   EmojiPickerOptions,
   MarkdownViewerProps,
+  SanitizeFn,
 } from '@dev_owl/cliveedit'
 ```
 
@@ -1172,6 +1219,8 @@ Build outputs in `dist/`:
 | `cliveedit.umd.js` | UMD | For script tags and legacy bundlers |
 | `editor.css` | CSS | All editor styles (import as `@dev_owl/cliveedit/style.css`) |
 | `*.d.ts` | TypeScript | Type declarations for all exports |
+
+`vue`, `markdown-it`, `turndown` and `dompurify` are not bundled. The UMD build expects them as the globals `Vue`, `markdownit`, `TurndownService` and `DOMPurify`, so load their browser builds before `cliveedit.umd.js` when using script tags.
 
 ---
 

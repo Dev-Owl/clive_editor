@@ -23,12 +23,17 @@ export default defineConfig({
       fileName: (format) => `cliveedit.${format}.js`,
     },
     rolldownOptions: {
-      external: ['vue', 'shiki', 'emoji-picker-element'],
+      // Runtime dependencies stay external so consumers install them
+      // themselves and their `npm audit` / Dependabot can see and update them
+      external: ['vue', 'shiki', 'emoji-picker-element', 'markdown-it', 'turndown', 'dompurify'],
       output: {
         globals: {
           vue: 'Vue',
           shiki: 'shiki',
           'emoji-picker-element': 'EmojiPickerElement',
+          'markdown-it': 'markdownit',
+          turndown: 'TurndownService',
+          dompurify: 'DOMPurify',
         },
       },
     },

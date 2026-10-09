@@ -34,6 +34,7 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { sanitizeHtml } from '@/utils/sanitize'
 import { parseMarkdown, serializeHtml } from '@/utils/markdown'
+import { sanitizeRenderedHtml, type SanitizeFn } from '@/utils/renderSanitizer'
 import type { ToolbarAction } from '@/types'
 import {
   IMAGE_SIZE_PRESETS,
@@ -70,6 +71,8 @@ const props = defineProps<{
   disabled?: boolean
   /** Optional highlight function for syntax highlighting code blocks */
   highlight?: (code: string, lang: string) => string
+  /** Replaces the default sanitiser for rendered HTML */
+  sanitize?: SanitizeFn
   /** Called when an image is pasted or dropped. Return a URL string. */
   onImageUpload?: (file: File) => Promise<string>
   /** Max image file size in bytes (default: 2 MB) */
@@ -130,6 +133,7 @@ defineExpose({
     isSyncing = true
     editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
       highlight: props.highlight,
+      sanitize: props.sanitize,
     })
     normalizeListStructure()
     normalizeCodeBlocks()
@@ -146,6 +150,7 @@ onMounted(() => {
   if (editorEl.value && props.modelValue) {
     editorEl.value.innerHTML = parseMarkdown(props.modelValue, {
       highlight: props.highlight,
+      sanitize: props.sanitize,
     })
     applyImageSizingMetadata(editorEl.value)
     // Heal documents that already contain marker-only list items so the
@@ -285,6 +290,7 @@ watch(
       clearImageSelection()
       editorEl.value.innerHTML = parseMarkdown(md, {
         highlight: props.highlight,
+        sanitize: props.sanitize,
       })
       applyImageSizingMetadata(editorEl.value)
       normalizeListStructure()
@@ -1140,7 +1146,21 @@ function onClick(e: MouseEvent): void {
 
   e.preventDefault()
   e.stopPropagation()
+
+  // In-document links (`#heading-id`) jump to the heading inside the editor
+  // instead of opening the page again in a new tab
+  if (href.startsWith('#')) {
+    scrollToAnchor(decodeURIComponent(href.slice(1)))
+    return
+  }
+
   window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+function scrollToAnchor(id: string): void {
+  if (!id || !editorEl.value) return
+  const target = editorEl.value.querySelector(`[id="${CSS.escape(id)}"]`)
+  target?.scrollIntoView({ block: 'start' })
 }
 
 /**
@@ -1210,7 +1230,7 @@ function showLangInput(labelEl: HTMLElement): void {
           // Shiki returns <pre><code>…</code></pre>, extract the inner HTML
           const match = highlighted.match(/<code[^>]*>([\s\S]*)<\/code>/)
           if (match) {
-            codeEl.innerHTML = match[1]
+            codeEl.innerHTML = sanitizeCodeHtml(match[1])
           }
         }
       } else {
@@ -1239,6 +1259,11 @@ function showLangInput(labelEl: HTMLElement): void {
 }
 
 /* ---- Re-highlight code blocks on edit ---- */
+
+/** Highlighter output goes through the same sanitiser as rendered markdown. */
+function sanitizeCodeHtml(html: string): string {
+  return (props.sanitize ?? sanitizeRenderedHtml)(html)
+}
 
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1283,7 +1308,7 @@ function rehighlightCurrentBlock(): void {
   const caretOffset = preCaretRange.toString().length
 
   // Replace HTML
-  codeEl.innerHTML = match[1]
+  codeEl.innerHTML = sanitizeCodeHtml(match[1])
 
   // Restore cursor position
   restoreCursorInCode(codeEl, caretOffset, sel)

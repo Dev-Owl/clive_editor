@@ -79,6 +79,23 @@ describe('CliveEdit print action', () => {
     expect(spy.mock.calls[0][0]).toBe('# Hello world')
   })
 
+  it('passes a custom sanitize function to the print view', async () => {
+    const spy = vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
+    const sanitize = (html: string) => html
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '# Hello world',
+        mode: 'markdown',
+        sanitize,
+      },
+    })
+
+    await wrapper.get('button[aria-label="Print"]').trigger('click')
+
+    expect(spy.mock.calls[0][1]?.sanitize).toBe(sanitize)
+  })
+
   it('prints even when the editor is disabled', async () => {
     const spy = vi.spyOn(printUtil, 'printMarkdown').mockReturnValue(null)
 
@@ -125,5 +142,21 @@ describe('CliveEdit print action', () => {
 
     expect(spy).toHaveBeenCalledTimes(1)
     expect(spy.mock.calls[0][0]).toBe('# Programmatic')
+  })
+})
+
+describe('CliveEdit sanitising', () => {
+  it('renders the visual editor through a custom sanitize function', () => {
+    const sanitize = vi.fn((html: string) => html.replace('Hello', 'Sanitised'))
+
+    const wrapper = mount(CliveEdit, {
+      props: {
+        modelValue: '# Hello',
+        sanitize,
+      },
+    })
+
+    expect(sanitize).toHaveBeenCalled()
+    expect(wrapper.get('.ce-wysiwyg h1').text()).toBe('Sanitised')
   })
 })

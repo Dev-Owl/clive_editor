@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.0
+
+TLDR: First stable release. Rendered HTML now always passes through a sanitiser (DOMPurify, replaceable with the new `sanitize` prop), `markdown-it` and `turndown` are regular dependencies instead of being bundled, the print view is sandboxed and no longer opens an empty print dialog first, and heading anchors follow GitHub's rules so links to repeated headings work.
+
+### Breaking
+
+- **`markdown-it`, `turndown` and `dompurify` are no longer bundled.** They are now `dependencies` and are installed with CliveEdit. Bundler users need no change. Script-tag users of the UMD build must load them first and expose them as the globals `markdownit`, `TurndownService` and `DOMPurify`.
+- **Rendered HTML is sanitised.** Output that relied on markup DOMPurify removes (event handlers, `javascript:` links, `<script>`, editable regions) no longer renders. Everything CliveEdit itself produces is kept.
+- **Heading anchor ids follow GitHub's rules.** Some ids change, so links stored against the old ids may need updating: every space becomes its own hyphen after punctuation is removed (`Image Paste & Drop` → `image-paste--drop`, was `image-paste-drop`), letters of every script are kept (`Über uns` → `über-uns`, was `ber-uns`), and only the visible text counts (a link in a heading no longer adds its URL). The first occurrence of a heading keeps its id.
+
+### Added
+
+- **Final sanitising layer for rendered HTML.** Every HTML CliveEdit renders — `MarkdownViewer`, the visual editor, markdown inserted via the editor context, re-highlighted code blocks and the print view — passes through DOMPurify before it reaches the page. One missed escape in a renderer can therefore no longer run script (see GHSA-p6c5-cfp4-36fp, fixed in 0.2.5). CliveEdit uses its own DOMPurify instance, so a DOMPurify in the host application is not affected.
+- **`sanitize` prop on `CliveEdit` and `MarkdownViewer`**, and a `sanitize` option on `parseMarkdown` / `printMarkdown`, to replace the default with your own policy. The default is exported as `sanitizeRenderedHtml` together with the `SanitizeFn` type, so a custom sanitiser can wrap it.
+- **Security section in the README**: what is sanitised, how to plug in your own sanitiser, the server-side rendering caveat, and a CSP recommendation.
+
+### Changed
+
+- **`markdown-it` and `turndown` are regular dependencies.** Their security fixes now reach you through your own `npm audit` / Dependabot without waiting for a CliveEdit release. The ES bundle shrinks from 262 kB to 129 kB.
+
+### Fixed
+
+- **Links to repeated headings went nowhere.** Every heading with the same text got the same id, so a link to the second `## Installation` could never reach it. Repeated headings are now numbered in document order (`installation`, `installation-1`, `installation-2`), like on GitHub, so tables of contents written for GitHub work in CliveEdit too.
+- **In-document links jumped to the wrong copy of a heading.** When the same markdown is shown twice on one page (e.g. editor and preview side by side), the browser always jumped to the first matching id. A click on a `#heading` link in `MarkdownViewer` now scrolls to the heading inside that viewer; the URL hash is still updated, so the link stays shareable and the back button works. Ctrl/Cmd+click keeps opening a new tab.
+- **Ctrl/Cmd+click on an in-document link in the editor opened the page again in a new tab.** It now scrolls to the heading inside the editor.
+- **Print opened an empty print dialog first.** The listener that starts printing was attached before the content was written, and the initial `about:blank` document of the iframe already fires `load` when the iframe is inserted — so the browser printed an empty page before the real one. Printing now starts once, after the document and its stylesheets have loaded.
+- **The print view could run script.** It was a same-origin iframe without a sandbox. It is now sandboxed without `allow-scripts` (`allow-same-origin allow-modals`), and the fallback cleanup timer runs on the host window.
+- **Links and images inserted through the editor escaped only quotes.** `link()`, `image()` and the code block command now escape `&`, `<`, `>`, `"` and `'` through one shared helper.
+
+### Docs
+
+- Fixed the README table-of-contents link to *Image Paste & Drop*, which pointed to an id that GitHub does not generate.
+
+### Internal
+
+- New `src/utils/renderSanitizer.ts` and `src/utils/escape.ts` (one escape helper instead of four local ones).
+- Tests for the sanitiser (dangerous markup removed, editor markup kept, heading anchors such as `#title` kept, host DOMPurify untouched), the `sanitize` prop in `CliveEdit` / `MarkdownViewer` / parser, sanitised highlighter output, the print sandbox and single print call, and escaping in `link()`.
+- Tests for heading anchors (numbering of repeated headings, GitHub slug rules, Unicode, link and code text), in-document link handling in viewer and editor, and a regression test that renders the README and checks that every in-document link resolves.
+
 ## 0.2.5
 
 TLDR: Security release — a crafted code block could run script in the reader's browser. Update if you render markdown written by other users. Affects 0.1.4 – 0.2.4.

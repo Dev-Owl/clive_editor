@@ -14,6 +14,7 @@ import {
   findClosestCell,
   isSelectionCrossCell,
 } from '@/utils/selection'
+import { escapeHtml } from '@/utils/escape'
 
 const LIST_MARKER_RE = /^(\s*)([-+*]|\d+\.)\s+(.*)$/
 
@@ -711,8 +712,8 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     } else {
       const text = sel.toString() || 'code'
       const displayLang = lang || 'plain text'
-      const langClass = lang ? ` class="language-${escapeAttr(lang)}"` : ''
-      const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeAttr(lang || '')}">${escapeHtml(displayLang)}</div>`
+      const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : ''
+      const langLabel = `<div class="ce-code-lang" contenteditable="false" data-lang="${escapeHtml(lang || '')}">${escapeHtml(displayLang)}</div>`
       insertHtmlAtCursor(`<pre>${langLabel}<code${langClass}>${escapeHtml(text)}</code></pre><p><br></p>`)
     }
     refreshActiveState()
@@ -728,7 +729,7 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     if (!finalUrl) return
 
     const finalText = text ?? (selectedText || finalUrl)
-    const html = `<a href="${escapeAttr(finalUrl)}">${escapeHtml(finalText)}</a>`
+    const html = `<a href="${escapeHtml(finalUrl)}">${escapeHtml(finalText)}</a>`
 
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0)
@@ -743,7 +744,7 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
     if (!finalSrc) return
 
     const finalAlt = alt ?? 'image'
-    const html = `<img src="${escapeAttr(finalSrc)}" alt="${escapeAttr(finalAlt)}" />`
+    const html = `<img src="${escapeHtml(finalSrc)}" alt="${escapeHtml(finalAlt)}" />`
     insertHtmlAtCursor(html)
   }
 
@@ -779,18 +780,6 @@ export function useEditor(editorRef: Ref<HTMLElement | null>) {
   }
 
   /* ---- utils ---- */
-
-  function escapeHtml(str: string): string {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-  }
-
-  function escapeAttr(str: string): string {
-    return str.replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-  }
 
   function normalizeListItemText(text: string): string {
     const match = text.match(LIST_MARKER_RE)
