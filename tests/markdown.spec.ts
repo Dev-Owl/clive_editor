@@ -142,4 +142,58 @@ describe('markdown utils', () => {
     expect(roundtrip).toContain('<li>One</li>')
     expect(roundtrip).toContain('Outro')
   })
+
+  describe('code block language label (XSS regression)', () => {
+    const toDom = (html: string) => {
+      const container = document.createElement('div')
+      container.innerHTML = html
+      return container
+    }
+
+    const elementPayload = '"><img src=x onerror=alert(1)>'
+    const attributePayload = 'x" onmouseover="alert(1)'
+
+    it('does not turn a crafted info string into an element', () => {
+      const dom = toDom(parseMarkdown(`\`\`\`${elementPayload}\ncode\n\`\`\``))
+
+      expect(dom.querySelector('img')).toBeNull()
+      expect(dom.querySelector('[onerror]')).toBeNull()
+      expect(dom.querySelectorAll('pre')).toHaveLength(1)
+    })
+
+    it('does not let a crafted info string add attributes to the label', () => {
+      const dom = toDom(parseMarkdown(`~~~${attributePayload}\ncode\n~~~`))
+      const label = dom.querySelector('.ce-code-lang') as HTMLElement
+
+      expect(dom.querySelector('[onmouseover]')).toBeNull()
+      expect(label.dataset.lang).toBe(attributePayload)
+      expect(label.textContent).toBe(attributePayload)
+    })
+
+    it('escapes the label when a highlighter is used', () => {
+      const highlight = (code: string) => `<pre class="shiki"><code>${code}</code></pre>`
+      const dom = toDom(parseMarkdown(`\`\`\`${elementPayload}\ncode\n\`\`\``, { highlight }))
+
+      expect(dom.querySelector('img')).toBeNull()
+      expect(dom.querySelector('[onerror]')).toBeNull()
+      expect((dom.querySelector('.ce-code-lang') as HTMLElement).dataset.lang).toBe(elementPayload)
+    })
+
+    it('keeps `$` sequences in the language literal when a highlighter is used', () => {
+      const highlight = (code: string) => `<pre class="shiki"><code>${code}</code></pre>`
+      const dom = toDom(parseMarkdown('```a$&b$1c\ncode\n```', { highlight }))
+      const label = dom.querySelector('.ce-code-lang') as HTMLElement
+
+      expect(label.dataset.lang).toBe('a$&b$1c')
+      expect(dom.querySelector('code')?.className).toBe('language-a$&b$1c')
+      expect(dom.querySelectorAll('pre')).toHaveLength(1)
+    })
+
+    it('still round-trips an ordinary language', () => {
+      const html = parseMarkdown('```ts\nconst a = 1\n```')
+
+      expect(html).toContain('data-lang="ts"')
+      expect(serializeHtml(html)).toContain('```ts\nconst a = 1\n```')
+    })
+  })
 })

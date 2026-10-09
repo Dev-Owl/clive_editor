@@ -23,6 +23,18 @@ describe('MarkdownViewer', () => {
     expect(wrapper.classes()).toContain('ce-viewer--bordered')
   })
 
+  it('does not render markup injected through a code block language', () => {
+    const wrapper = mount(MarkdownViewer, {
+      props: {
+        modelValue: '```"><img src=x onerror=alert(1)>\ncode\n```',
+      },
+    })
+
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.find('[onerror]').exists()).toBe(false)
+    expect(wrapper.find('pre code').text()).toBe('code')
+  })
+
   it('updates rendered output and supports disabling the border', async () => {
     const wrapper = mount(MarkdownViewer, {
       props: {
