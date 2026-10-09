@@ -97,7 +97,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Trash2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { findClosestCell } from '@/utils/selection'
 import {
   addRowAbove,

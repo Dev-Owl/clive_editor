@@ -2,7 +2,7 @@
 /*  markdown.ts — thin wrappers around markdown-it & turndown          */
 /* ================================================================== */
 
-import MarkdownIt from 'markdown-it'
+import MarkdownIt, { type MarkdownIt as MarkdownItInstance } from 'markdown-it'
 import TurndownService from 'turndown'
 import {
   applyImageSizingMetadata,
@@ -25,7 +25,7 @@ export interface ParseMarkdownOptions {
  * When a `highlight` function is provided, code blocks are syntax-highlighted
  * and a language label element is injected into the output.
  */
-function createMarkdownIt(highlight?: (code: string, lang: string) => string): MarkdownIt {
+function createMarkdownIt(highlight?: (code: string, lang: string) => string): MarkdownItInstance {
   const md = new MarkdownIt({
     html: false,       // disable raw HTML tags in source (security)
     linkify: true,     // auto-convert URL-like text to links
@@ -90,13 +90,13 @@ function createMarkdownIt(highlight?: (code: string, lang: string) => string): M
 /* ---------- MD instances ---------- */
 
 // Default instance (no highlighting)
-let mdPlain: MarkdownIt | null = null
+let mdPlain: MarkdownItInstance | null = null
 // Highlighted instance (cached per highlight function reference)
-let mdHighlighted: MarkdownIt | null = null
+let mdHighlighted: MarkdownItInstance | null = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cachedHighlightFn: any = null
 
-function getMdInstance(highlight?: (code: string, lang: string) => string): MarkdownIt {
+function getMdInstance(highlight?: (code: string, lang: string) => string): MarkdownItInstance {
   if (!highlight) {
     if (!mdPlain) mdPlain = createMarkdownIt()
     return mdPlain

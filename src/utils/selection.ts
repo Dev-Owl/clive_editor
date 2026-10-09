@@ -231,6 +231,27 @@ export function insertHtmlAtCursor(html: string): void {
 }
 
 /**
+ * Insert plain text at the current cursor position, replacing any selection.
+ * The text is inserted as a text node, so it is never interpreted as HTML.
+ */
+export function insertTextAtCursor(text: string): void {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return
+  const range = sel.getRangeAt(0)
+  range.deleteContents()
+
+  const node = document.createTextNode(text)
+  range.insertNode(node)
+
+  // Move cursor after inserted text
+  const newRange = document.createRange()
+  newRange.setStartAfter(node)
+  newRange.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(newRange)
+}
+
+/**
  * Insert markdown syntax around the current selection in a textarea.
  */
 export function insertTextareaSyntax(
