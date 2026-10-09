@@ -16,6 +16,7 @@ import {
   findCopyButton,
 } from '@/utils/codeCopy'
 import type { HighlightOptions } from '@/types'
+import type { SanitizeFn } from '@/utils/renderSanitizer'
 
 /* ---- Props ---- */
 
@@ -35,6 +36,11 @@ export interface MarkdownViewerProps {
    * clipboard (default true). Viewer only — the editor never shows it.
    */
   codeCopyButton?: boolean
+  /**
+   * Replaces the default sanitiser for the rendered HTML
+   * (default: DOMPurify via `sanitizeRenderedHtml`).
+   */
+  sanitize?: SanitizeFn
 }
 
 const props = withDefaults(defineProps<MarkdownViewerProps>(), {
@@ -81,6 +87,7 @@ const renderedHtml = computed(() => {
 
   const html = parseMarkdown(props.modelValue, {
     highlight: hlFn ?? undefined,
+    sanitize: props.sanitize,
   })
 
   return props.codeCopyButton ? addCodeCopyButtons(html) : html
@@ -92,7 +99,36 @@ const renderedHtml = computed(() => {
 // Vue listeners — the clicks are picked up on the content element instead.
 function onContentClick(event: MouseEvent): void {
   const button = findCopyButton(event.target)
-  if (button) copyCodeBlock(button)
+  if (button) {
+    copyCodeBlock(button)
+    return
+  }
+  jumpToAnchor(event)
+}
+
+/* ---- In-document links ---- */
+
+// Heading ids repeat when the same document is rendered more than once on a
+// page (e.g. editor and preview side by side), and the browser always jumps
+// to the first match. In-document links therefore scroll within this viewer.
+function jumpToAnchor(event: MouseEvent): void {
+  // Leave modified clicks (new tab / window) to the browser
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+  if (!(event.target instanceof Element) || !(event.currentTarget instanceof Element)) return
+
+  const anchor = event.target.closest('a')
+  const href = anchor?.getAttribute('href')
+  if (!href?.startsWith('#') || href.length < 2) return
+
+  const target = event.currentTarget.querySelector(
+    `[id="${CSS.escape(decodeURIComponent(href.slice(1)))}"]`,
+  )
+  if (!target) return
+
+  event.preventDefault()
+  // Keep the URL shareable and the back button working
+  if (location.hash !== href) history.pushState(history.state, '', href)
+  target.scrollIntoView({ block: 'start' })
 }
 
 onBeforeUnmount(clearCopyFeedback)

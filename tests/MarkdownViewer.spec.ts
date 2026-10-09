@@ -35,6 +35,58 @@ describe('MarkdownViewer', () => {
     expect(wrapper.find('pre code').text()).toBe('code')
   })
 
+  it('jumps to headings of in-document links within its own content', async () => {
+    // Same document twice on one page: the browser alone would jump to the first
+    const first = mount(MarkdownViewer, { attachTo: document.body, props: { modelValue: '## Setup\n\n## Setup' } })
+    const second = mount(MarkdownViewer, {
+      attachTo: document.body,
+      props: { modelValue: '[Go](#setup-1)\n\n## Setup\n\n## Setup' },
+    })
+
+    const scrolled: Element[] = []
+    const originalScroll = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    const pushState = vi.spyOn(history, 'pushState')
+
+    try {
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+      second.get('a').element.dispatchEvent(click)
+
+      expect(click.defaultPrevented).toBe(true)
+      expect(scrolled).toEqual([second.get('[id="setup-1"]').element])
+      expect(pushState).toHaveBeenCalledWith(history.state, '', '#setup-1')
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll
+      pushState.mockRestore()
+      history.replaceState(null, '', location.pathname)
+      first.unmount()
+      second.unmount()
+    }
+  })
+
+  it('leaves modified clicks on in-document links to the browser', () => {
+    const wrapper = mount(MarkdownViewer, { attachTo: document.body, props: { modelValue: '[Go](#setup)\n\n## Setup' } })
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true })
+    wrapper.get('a').element.dispatchEvent(click)
+
+    expect(click.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders through a custom sanitize function', () => {
+    const wrapper = mount(MarkdownViewer, {
+      props: {
+        modelValue: '# Hello',
+        sanitize: (html: string) => html.replace('Hello', 'Sanitised'),
+      },
+    })
+
+    expect(wrapper.get('h1').text()).toBe('Sanitised')
+  })
+
   it('updates rendered output and supports disabling the border', async () => {
     const wrapper = mount(MarkdownViewer, {
       props: {

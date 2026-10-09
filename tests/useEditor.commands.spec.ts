@@ -284,6 +284,21 @@ describe('useEditor link', () => {
     expect(a?.textContent).toBe('Example')
   })
 
+  it('keeps special characters in the url and label as plain values', () => {
+    const el = createEditor('<p>x</p>')
+    const editor = useEditor(ref(el))
+    setCollapsedSelection(el.querySelector('p')!.firstChild!, 1)
+
+    const url = 'https://example.com/?a=1&b=<2>&c="3"&d=\'4\''
+    editor.link(url, '<b>not bold</b>')
+
+    const a = el.querySelector('a')
+    expect(a?.getAttribute('href')).toBe(url)
+    expect(a?.textContent).toBe('<b>not bold</b>')
+    expect(a?.querySelector('b')).toBeNull()
+    expect(a?.attributes).toHaveLength(1)
+  })
+
   it('uses the selected text as the link label when text is omitted', () => {
     const el = createEditor('<p>label</p>')
     const editor = useEditor(ref(el))

@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { SanitizeFn } from '../utils/renderSanitizer'
 
 /* ------------------------------------------------------------------ */
 /*  Editor Mode                                                        */
@@ -140,6 +141,12 @@ export interface CliveEditProps {
    * Images exceeding this limit are silently ignored.
    */
   maxImageSize?: number
+  /**
+   * Replaces the default sanitiser that every rendered HTML passes through
+   * before it reaches the page (editor, insertions, print view).
+   * Default: DOMPurify via `sanitizeRenderedHtml`.
+   */
+  sanitize?: SanitizeFn
 }
 
 export type CliveEditEmits = {

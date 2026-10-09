@@ -9,6 +9,10 @@ export { default as CliveEdit } from './components/CliveEdit.vue'
 export { default as MarkdownViewer } from './components/MarkdownViewer.vue'
 export type { MarkdownViewerProps } from './components/MarkdownViewer.vue'
 
+// Sanitising of rendered HTML (default sanitiser, reusable in a custom one)
+export { sanitizeRenderedHtml } from './utils/renderSanitizer'
+export type { SanitizeFn } from './utils/renderSanitizer'
+
 // Composables (for advanced / headless usage)
 export { useHistory } from './composables/useHistory'
 export { useEditor } from './composables/useEditor'

@@ -28,6 +28,20 @@ describe('WysiwygEditor keyboard flows', () => {
     wrapper.unmount()
   })
 
+  it('sanitises highlighter output when a code block is rendered', () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '```ts\ncode\n```',
+        highlight: () => '<pre><code><img src="x" onerror="alert(1)">code</code></pre>',
+      },
+    })
+
+    expect(wrapper.find('[onerror]').exists()).toBe(false)
+    expect(wrapper.get('.ce-code-lang').text()).toBe('ts')
+    wrapper.unmount()
+  })
+
   it('emits indent and outdent actions when tabbing inside a list item', async () => {
     const wrapper = mount(WysiwygEditor, {
       attachTo: document.body,
@@ -179,6 +193,32 @@ describe('WysiwygEditor keyboard flows', () => {
 
     expect(openSpy).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer')
     wrapper.unmount()
+  })
+
+  it('jumps to the heading of an in-document link on ctrl click', async () => {
+    const wrapper = mount(WysiwygEditor, {
+      attachTo: document.body,
+      props: {
+        modelValue: '[Go](#setup-1)\n\n## Setup\n\n## Setup',
+      },
+    })
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const scrolled: string[] = []
+    const originalScroll = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id)
+    }
+
+    try {
+      await wrapper.get('.ce-wysiwyg a').trigger('click', { ctrlKey: true })
+
+      expect(openSpy).not.toHaveBeenCalled()
+      expect(scrolled).toEqual(['setup-1'])
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll
+      wrapper.unmount()
+    }
   })
 
   it('moves above the first code block when pressing ArrowUp on its first line', async () => {

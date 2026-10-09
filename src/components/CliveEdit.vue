@@ -8,7 +8,7 @@
 
     <!-- WYSIWYG Editor -->
     <WysiwygEditor v-show="currentMode === 'wysiwyg'" ref="wysiwygRef" :model-value="modelValue"
-      :placeholder="placeholder" :disabled="disabled" :highlight="highlightFn ?? undefined"
+      :placeholder="placeholder" :disabled="disabled" :highlight="highlightFn ?? undefined" :sanitize="sanitize"
       :on-image-upload="onImageUpload" :max-image-size="maxImageSize" @update:model-value="onContentUpdate"
       @selection-change="onSelectionChange" @action="handleToolbarAction" />
 
@@ -261,6 +261,7 @@ function renderMarkdownInsertion(markdown: string): string {
   const container = document.createElement('div')
   container.innerHTML = parseMarkdown(markdown, {
     highlight: highlightFn.value ?? undefined,
+    sanitize: props.sanitize,
   })
 
   if (container.children.length === 1 && container.firstElementChild?.tagName === 'P') {
@@ -330,6 +331,7 @@ function openPrintView(): void {
 
   printMarkdown(markdown, {
     highlight: highlightFn.value ?? undefined,
+    sanitize: props.sanitize,
   })
 }
 
